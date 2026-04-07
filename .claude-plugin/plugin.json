@@ -1,0 +1,104 @@
+{
+  "name": "dbt-pipeline-toolkit",
+  "version": "1.0.0",
+  "description": "End-to-end dbt pipeline automation for SQL Server. CSV to star schema with staging, dimensions, facts, tests, and validation. Supports local SQL Server, Azure SQL Database, and remote instances with 4 auth types.",
+  "author": "Mihaly Kavasi",
+  "agents": "./agents/",
+  "skills": "./skills/",
+  "mcpServers": {
+    "sql-server-mcp": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/servers/dist/minimal-mcp-server.js"],
+      "env": {
+        "SQL_SERVER": "${user_config.sql_server}",
+        "SQL_DATABASE": "${user_config.sql_database}",
+        "SQL_AUTH_TYPE": "${user_config.sql_auth_type}",
+        "SQL_USER": "${user_config.sql_user}",
+        "SQL_PASSWORD": "${user_config.sql_password}",
+        "SQL_ENCRYPT": "${user_config.sql_encrypt}",
+        "SQL_TRUST_CERT": "${user_config.sql_trust_cert}",
+        "AZURE_TENANT_ID": "${user_config.azure_tenant_id}",
+        "AZURE_CLIENT_ID": "${user_config.azure_client_id}",
+        "AZURE_CLIENT_SECRET": "${user_config.azure_client_secret}"
+      }
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/validate-dbt-structure.py",
+            "statusMessage": "Validating dbt file structure..."
+          }
+        ]
+      }
+    ],
+    "WorktreeCreate": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/create-worktree.py"
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/remove-worktree.py"
+          }
+        ]
+      }
+    ]
+  },
+  "userConfig": {
+    "sql_server": {
+      "description": "SQL Server hostname (e.g., localhost, myserver.database.windows.net). Leave empty to use the runtime 'connect' tool instead.",
+      "sensitive": false
+    },
+    "sql_database": {
+      "description": "Default SQL Server database name. Leave empty to specify at runtime.",
+      "sensitive": false
+    },
+    "sql_auth_type": {
+      "description": "Authentication method: 'sql' (username/password), 'windows' (integrated), 'entra_interactive' (browser), 'entra_sp' (service principal). Default: 'sql'",
+      "sensitive": false
+    },
+    "sql_user": {
+      "description": "SQL Server username (for 'sql' auth type). Leave empty for Windows Auth or Entra Interactive.",
+      "sensitive": false
+    },
+    "sql_password": {
+      "description": "SQL Server password (for 'sql' auth type). Stored in system keychain.",
+      "sensitive": true
+    },
+    "sql_encrypt": {
+      "description": "Encrypt connection: 'true' (required for Azure), 'false' (typical for local). Default: 'false'",
+      "sensitive": false
+    },
+    "sql_trust_cert": {
+      "description": "Trust server certificate: 'true' (local dev), 'false' (Azure/production). Default: 'true'",
+      "sensitive": false
+    },
+    "azure_tenant_id": {
+      "description": "Azure Entra ID tenant ID (only for 'entra_sp' auth type)",
+      "sensitive": false
+    },
+    "azure_client_id": {
+      "description": "Azure Entra ID client/application ID (only for 'entra_sp' auth type)",
+      "sensitive": false
+    },
+    "azure_client_secret": {
+      "description": "Azure Entra ID client secret (only for 'entra_sp' auth type). Stored in system keychain.",
+      "sensitive": true
+    }
+  }
+}

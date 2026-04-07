@@ -1,0 +1,11 @@
+{
+  "name": "dbt-pipeline-toolkit",
+  "description": "dbt pipeline automation toolkit for SQL Server",
+  "plugins": [
+    {
+      "name": "dbt-pipeline-toolkit",
+      "description": "End-to-end dbt pipeline: CSV to star schema with agents, skills, MCP server, and validation hooks",
+      "source": "./"
+    }
+  ]
+}
