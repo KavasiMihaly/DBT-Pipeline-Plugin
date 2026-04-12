@@ -1,10 +1,16 @@
 {
   "name": "dbt-pipeline-toolkit",
   "version": "1.0.0",
-  "description": "End-to-end dbt pipeline automation for SQL Server. CSV to star schema with staging, dimensions, facts, tests, and validation. Supports local SQL Server, Azure SQL Database, and remote instances with 4 auth types.",
-  "author": "Mihaly Kavasi",
-  "agents": "./agents/",
-  "skills": "./skills/",
+  "description": "End-to-end dbt pipeline automation for SQL Server. CSV to star schema with staging, dimensions, facts, tests, and validation.",
+  "author": {
+    "name": "Mihaly Kavasi",
+    "email": "kavasi.mihaly@onedaybi.com",
+    "url": "https://github.com/KavasiMihaly"
+  },
+  "homepage": "https://github.com/KavasiMihaly/DBT-Pipeline-Plugin",
+  "repository": "https://github.com/KavasiMihaly/DBT-Pipeline-Plugin",
+  "license": "MIT",
+  "keywords": ["dbt", "sql-server", "data-engineering", "star-schema", "pipeline", "analytics"],
   "mcpServers": {
     "sql-server-mcp": {
       "command": "node",
@@ -61,43 +67,63 @@
   },
   "userConfig": {
     "sql_server": {
+      "title": "SQL Server Hostname",
       "description": "SQL Server hostname (e.g., localhost, myserver.database.windows.net). Leave empty to use the runtime 'connect' tool instead.",
+      "type": "string",
       "sensitive": false
     },
     "sql_database": {
+      "title": "Default Database",
       "description": "Default SQL Server database name. Leave empty to specify at runtime.",
+      "type": "string",
       "sensitive": false
     },
     "sql_auth_type": {
+      "title": "Authentication Type",
       "description": "Authentication method: 'sql' (username/password), 'windows' (integrated), 'entra_interactive' (browser), 'entra_sp' (service principal). Default: 'sql'",
+      "type": "string",
       "sensitive": false
     },
     "sql_user": {
+      "title": "SQL Username",
       "description": "SQL Server username (for 'sql' auth type). Leave empty for Windows Auth or Entra Interactive.",
+      "type": "string",
       "sensitive": false
     },
     "sql_password": {
+      "title": "SQL Password",
       "description": "SQL Server password (for 'sql' auth type). Stored in system keychain.",
+      "type": "string",
       "sensitive": true
     },
     "sql_encrypt": {
+      "title": "Encrypt Connection",
       "description": "Encrypt connection: 'true' (required for Azure), 'false' (typical for local). Default: 'false'",
+      "type": "string",
       "sensitive": false
     },
     "sql_trust_cert": {
+      "title": "Trust Server Certificate",
       "description": "Trust server certificate: 'true' (local dev), 'false' (Azure/production). Default: 'true'",
+      "type": "string",
       "sensitive": false
     },
     "azure_tenant_id": {
+      "title": "Azure Tenant ID",
       "description": "Azure Entra ID tenant ID (only for 'entra_sp' auth type)",
+      "type": "string",
       "sensitive": false
     },
     "azure_client_id": {
+      "title": "Azure Client ID",
       "description": "Azure Entra ID client/application ID (only for 'entra_sp' auth type)",
+      "type": "string",
       "sensitive": false
     },
     "azure_client_secret": {
+      "title": "Azure Client Secret",
       "description": "Azure Entra ID client secret (only for 'entra_sp' auth type). Stored in system keychain.",
+      "type": "string",
       "sensitive": true
     }
   }
