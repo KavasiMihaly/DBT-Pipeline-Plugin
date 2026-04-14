@@ -22,6 +22,31 @@ Environment variables (set by plugin userConfig or manually):
 
 import os
 
+
+def _load_plugin_userconfig_env():
+    """Map CLAUDE_PLUGIN_OPTION_<KEY> -> <KEY> for SQL connection env vars.
+
+    Claude Code plugin subprocesses receive userConfig values as
+    CLAUDE_PLUGIN_OPTION_<KEY> environment variables, but this module expects
+    bare names (e.g. SQL_SERVER). Copy the prefixed variants to the bare names
+    when the bare name is not already set, so the script behaves identically
+    whether launched as a plugin subprocess or as a standalone command.
+    """
+    keys = (
+        'SQL_SERVER', 'SQL_DATABASE', 'SQL_AUTH_TYPE', 'SQL_USER', 'SQL_PASSWORD',
+        'SQL_ENCRYPT', 'SQL_TRUST_CERT', 'SQL_DRIVER',
+        'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET',
+    )
+    for key in keys:
+        if not os.environ.get(key):
+            fallback = os.environ.get(f'CLAUDE_PLUGIN_OPTION_{key}')
+            if fallback:
+                os.environ[key] = fallback
+
+
+_load_plugin_userconfig_env()
+
+
 # Default ODBC driver — auto-detect if not set
 DEFAULT_DRIVER = "ODBC Driver 17 for SQL Server"
 

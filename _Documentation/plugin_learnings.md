@@ -16,42 +16,66 @@ The promise: a user drops CSV files in a folder, answers 5 questions, approves a
 
 ---
 
-## Finding 1 — Plugin agents get namespaced at install time
+## Finding 1 — Plugin agents get namespaced at install time (and the docs example is wrong)
 
 ### What I learned
 
-When a Claude Code plugin is installed, every agent it ships is registered under a namespace derived from the plugin's `name` field in `plugin.json`. The format is:
+When a Claude Code plugin is installed, every agent it ships is registered under a namespace derived from the plugin's `name` field in `plugin.json`. What the docs say vs what actually happens turned out to be two different things, and chasing that gap was the single most expensive lesson of building this plugin.
 
-```
-<plugin-name>:<agent-name>
-```
-
-So `business-analyst` inside `dbt-pipeline-toolkit` becomes `dbt-pipeline-toolkit:business-analyst` once installed. This is confirmed in the official Claude Code plugins reference:
+**What the official plugins reference shows:**
 
 > "This name is used for namespacing components. For example, in the UI, the agent `agent-creator` for the plugin with name `plugin-dev` will appear as `plugin-dev:agent-creator`."
 
-The marketplace name is **not** part of the namespace — only the plugin name.
+That implies a 2-part format: `<plugin-name>:<agent-name>`. I applied a fix based on that example and renamed every reference in the orchestrator from bare names (e.g. `business-analyst`) to the documented 2-part form (e.g. `dbt-pipeline-toolkit:business-analyst`). That fix was **still broken** on a fresh install.
 
-### How it broke
+**What actually happens when the plugin is installed:**
 
-The orchestrator agent had two places that referenced sibling agents by their bare names:
+I verified on a clean machine by checking the `/agents` picker, and every registered agent shows up with a **3-part** name:
 
-1. The `tools:` allowlist:
-   ```yaml
-   tools: Agent(business-analyst, data-explorer, dbt-staging-builder, ...)
-   ```
-2. Every `Task(...)` call in its workflow body:
-   ```
-   Task(subagent_type: "business-analyst", ...)
-   ```
+```
+dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator
+dbt-pipeline-toolkit:business-analyst:business-analyst
+dbt-pipeline-toolkit:data-explorer:data-explorer
+...
+```
 
-When running locally during development (via `.claude/agents/...` or `--plugin-dir`), agents live under their bare names and everything worked. When installed through the marketplace, the bare names no longer matched any registered agent — so the `Agent(...)` allowlist became effectively empty and every delegation call failed to resolve. The orchestrator ran, spawned nothing, and reported no errors.
+The 3 segments are:
+
+```
+<plugin-name> : <subdirectory-under-agents/> : <frontmatter-name-field>
+```
+
+For this plugin, every agent's subdirectory name matches its frontmatter `name` field, so every 3-part name has a duplicated middle+last segment — but that's the real registered name, not a display quirk.
+
+**Why the docs example doesn't match reality:**
+
+The official example in the plugins reference is for a **flat** agent file structure: `agents/security-reviewer.md`, `agents/performance-tester.md`. In that layout, the format really is `<plugin>:<filename-without-ext>` — 2 parts. But this plugin (like many real plugins that want per-agent scope for assets, examples, and reference files) uses a **subdirectory** structure: `agents/<name>/agent.md`. When Claude Code discovers agents under nested directories, it uses the subdirectory as an intermediate namespace level, producing 3-part names.
+
+The docs don't document this behavior at all. The only way to discover it is to install the plugin on a fresh machine and look at the registered name. That's a significant gap in the official plugin reference.
+
+### How it broke (three times)
+
+1. **First break** — the orchestrator originally referenced sibling agents by their bare names (`business-analyst`, `dbt-staging-builder`, etc.) in both the `tools: Agent(...)` allowlist and every `Task(subagent_type: "...")` call. That worked in local dev (where agents live under bare names via `.claude/agents/` or `--plugin-dir`) and failed silently on install.
+2. **Second break** — I read the docs, saw the 2-part format, and renamed everything to `dbt-pipeline-toolkit:business-analyst` etc. Still broken, still silent, still zero error output. The `Agent(...)` allowlist was still empty because no registered agent matched the 2-part name.
+3. **Third break caught it** — testing on a fresh install, checking the `/agents` picker directly, revealed the 3-part name with the subdirectory segment. Only then did the correct format (`dbt-pipeline-toolkit:<dir>:<name>`) become visible.
+
+At every stage, the orchestrator would run, produce no error, spawn nothing, and eventually time out or hit `maxTurns`. The failure was undetectable without a fresh install.
+
+### Fix applied
+
+Every `dbt-pipeline-toolkit:<name>` reference in `agents/dbt-pipeline-orchestrator/agent.md` was updated to `dbt-pipeline-toolkit:<name>:<name>` — the `tools: Agent(...)` allowlist, all 8 `subagent_type:` spawn calls, and all 3 `claude --agent ...` invocation examples. The orchestrator is now invoked as:
+
+```bash
+claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator "Build a pipeline"
+```
 
 ### Takeaway for the talk
 
-> **If your plugin has an orchestrator agent that spawns siblings, every reference needs to use the namespaced name.** This applies to both the `tools: Agent(...)` allowlist and every inline `subagent_type:` in prompts and code blocks inside the agent's system prompt.
+> **Don't trust documentation examples — verify the real registered name on a fresh install.** The Claude Code plugins reference shows a 2-part namespace format for agents. The actual format depends on your directory layout: flat files get 2-part names, subdirectory-based agents get 3-part names. This isn't documented. The only reliable way to know what your plugin actually exposes is to install it on a clean machine and look at the picker.
+>
+> And keep the subdirectory name identical to the frontmatter `name` field. If they diverge, the registered name silently follows the directory, and every in-repo reference to the agent becomes wrong with no error.
 
-This is a subtle but critical distinction between "works in dev" and "works when installed." It's worth a dedicated slide.
+This is the finding that most deserves a dedicated slide: it's the exact story of "works in dev, works according to the docs, still broken in production" and it took three fix attempts before a fresh-install test surfaced the real format. **The main point: the docs example is for flat files only; subdirectories add an extra segment.**
 
 ---
 
@@ -155,9 +179,108 @@ This needs to be documented prominently in the plugin README, not buried in the 
 
 ---
 
-## Finding 5 — Development vs installed behavior diverges
+## Finding 5 — `userConfig` env vars are namespaced for subprocesses (and installs don't always prompt)
 
-A theme across all four findings: **the plugin behaves differently when you're developing it vs. when it's installed from a marketplace**. During dev you can point Claude Code at the plugin directory with `--plugin-dir ./`, or drop the agents into `.claude/agents/`, and everything works under bare names with full `permissionMode` support. Install the same plugin on a fresh machine via the marketplace and half of your assumptions silently break.
+### What I learned
+
+Claude Code plugins declare install-time configuration through a `userConfig` block in `plugin.json`. Its stated purpose in the official docs:
+
+> "The `userConfig` field declares values that Claude Code prompts the user for when the plugin is enabled. Use this instead of requiring users to hand-edit `settings.json`."
+
+The intended flow: the user runs `/plugin install <plugin>@<marketplace>`, Claude Code parses `userConfig`, prompts interactively for each key (using the `description` as the prompt text), persists non-sensitive values to `settings.json` under `pluginConfigs[<plugin>].options`, and routes sensitive values to the system keychain. Stored values are then surfaced in two forms:
+
+1. **Template substitution**: `${user_config.KEY}` in `mcpServers`, `lspServers`, hooks, and non-sensitive skill/agent content. This is how the MCP server block in `plugin.json` gets its env vars.
+2. **Environment variables**: Claude Code exports **every** userConfig value to **every** plugin subprocess as `CLAUDE_PLUGIN_OPTION_<KEY>` (uppercased). These variables are set automatically — the plugin does not have to opt in to see them.
+
+The critical detail: **the env var is `CLAUDE_PLUGIN_OPTION_<KEY>`, not the bare `<KEY>`.** The plugin's own code has to either read the prefixed name or remap it to the bare name it expects.
+
+### How it broke — two problems, same root cause
+
+**Problem A — the env var mismatch:**
+
+The MCP server in this plugin works because `plugin.json` *explicitly* maps userConfig keys to bare env var names in its `mcpServers.sql-server-mcp.env` block:
+
+```json
+"env": {
+  "SQL_SERVER": "${user_config.sql_server}",
+  "SQL_DATABASE": "${user_config.sql_database}",
+  ...
+}
+```
+
+So the Node MCP server subprocess starts with `SQL_SERVER=localhost` etc. — exactly what its code reads via `process.env.SQL_SERVER`.
+
+But the plugin's **Python skill scripts** are not inside the MCP server. They are separate subprocesses spawned by `Bash` tool calls when agents run the skills. Those subprocesses inherit the parent's environment, which includes every `CLAUDE_PLUGIN_OPTION_*` variable — but **no bare `SQL_*` variables**. Meanwhile the Python scripts read:
+
+```python
+os.environ.get('SQL_SERVER', 'localhost')
+os.environ.get('SQL_DATABASE', '')
+os.environ.get('SQL_USER', '')
+# ...
+```
+
+So every SQL-aware skill (`sql-server-reader`, `sql-executor`, `data-profiler`, `dbt-project-initializer`) silently fell back to defaults — `localhost`, empty database, empty credentials. On a fresh install the MCP tools worked fine from Claude (because they live inside the Node server), which made users believe the connection was good. Then the orchestrator reached Stage 6 (`sql-executor` load) and the Python script tried to bulk-load CSVs against `localhost` with no database name. In background mode, the failure was invisible.
+
+**Problem B — no prompt appeared during install or update:**
+
+Separately, when the plugin was installed and then updated on a second machine, Claude Code **did not show any interactive prompt for the `userConfig` fields**. The plugin was enabled, the MCP server started, but the user was never asked for server, database, credentials. This is a second layer of confusion on top of Problem A: not only do the Python scripts fail to see the values, the user never got a chance to supply them in the first place.
+
+Hypotheses (unverified — worth testing in isolation):
+
+- The `userConfig` schema in `plugin.json` includes `title` and `type` fields that don't appear in the documented schema example (`description` and `sensitive` only). These might be silently ignored or might cause the prompt block to be skipped entirely.
+- Every field's `description` says "Leave empty to..." — possibly that phrasing is being interpreted as "field is optional and can be skipped" by whatever logic decides which keys to prompt for.
+- Update vs fresh-install behavior may differ: updates may not re-prompt at all, and if the initial install skipped the prompts for some reason, the update won't recover.
+- The user's Claude Code version may have different `userConfig` prompt behavior — the feature may have been added or changed after this plugin was authored.
+
+Either way, the failure mode is clear: **the plugin shipped with a userConfig block that was both not being prompted for AND not reachable by the Python scripts even if the user had filled it in manually.**
+
+### Fix applied
+
+The env var mismatch (Problem A) was fixed directly by adding a small helper function `_load_plugin_userconfig_env()` to every Python script that reads SQL connection environment variables. The helper runs at module load time, before `argparse` evaluates its defaults, and copies `CLAUDE_PLUGIN_OPTION_<KEY>` → `<KEY>` for every SQL env var name when the bare name is not already set:
+
+```python
+def _load_plugin_userconfig_env():
+    keys = (
+        'SQL_SERVER', 'SQL_DATABASE', 'SQL_AUTH_TYPE', 'SQL_USER', 'SQL_PASSWORD',
+        'SQL_ENCRYPT', 'SQL_TRUST_CERT', 'SQL_DRIVER',
+        'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET',
+    )
+    for key in keys:
+        if not os.environ.get(key):
+            fallback = os.environ.get(f'CLAUDE_PLUGIN_OPTION_{key}')
+            if fallback:
+                os.environ[key] = fallback
+
+_load_plugin_userconfig_env()
+```
+
+Applied to five files:
+- `skills/sql-connection/scripts/connect.py` (shared connection helper)
+- `skills/sql-server-reader/scripts/query_sql_server.py`
+- `skills/data-profiler/scripts/profile_data.py`
+- `skills/sql-executor/scripts/load_data.py`
+- `skills/dbt-project-initializer/scripts/initialize_project.py`
+
+The block is duplicated rather than shared because three of the consumer scripts import `connect.py` lazily (inside their `.connect()` methods), which runs *after* `argparse` has already evaluated its defaults from `os.environ.get(...)`. Putting the helper only in `connect.py` wouldn't fix the argparse defaults. The duplication is ugly, but it's five nearly-identical copies of a 15-line function — tolerable for a clear correctness win.
+
+The no-prompt problem (Problem B) is **not yet fixed** and needs investigation:
+- Strip `title` and `type` from the `userConfig` entries and see if a fresh install prompts correctly
+- Test uninstall + reinstall versus update behavior
+- If prompts still don't fire, add README documentation telling users to edit `settings.json` manually and list the exact key paths
+
+### Takeaway for the talk
+
+> **Plugin-declared config and plugin subprocess env vars are not the same thing.** Template substitution (`${user_config.KEY}`) works inside specific plugin manifest blocks. Subprocess environment variables come through as `CLAUDE_PLUGIN_OPTION_<KEY>`. If your plugin's own scripts expect bare names, you have to remap at the subprocess boundary.
+>
+> And: **the interactive prompt is not a guarantee.** Even with a well-formed `userConfig` block, the user may never see a prompt on install or update, for reasons that are currently unclear to me. Ship a README that documents how to set the config manually as a fallback.
+
+This finding is the one I most want to lead with in the part of the talk about "deployment surface area is bigger than your code." It's two bugs stacked on top of each other, both invisible in dev, both silent at runtime, and the combination is what users will actually experience.
+
+---
+
+## Finding 6 — Development vs installed behavior diverges
+
+A theme across all five preceding findings: **the plugin behaves differently when you're developing it vs. when it's installed from a marketplace**. During dev you can point Claude Code at the plugin directory with `--plugin-dir ./`, or drop the agents into `.claude/agents/`, and everything works under bare names with full `permissionMode` support. Install the same plugin on a fresh machine via the marketplace and half of your assumptions silently break.
 
 Specific divergences I hit:
 
@@ -186,13 +309,24 @@ This is probably the biggest single takeaway for anyone building plugins for pro
 
 ## Fixes applied to this plugin
 
-All three findings were addressed in a single pass on the orchestrator and the four builder agents:
+The findings above were addressed in two passes on the repo:
 
-1. **Namespacing** — `tools: Agent(...)` and every `subagent_type:` in the orchestrator now use `dbt-pipeline-toolkit:<name>`.
-2. **Permission mode at call site** — every `Task(..., run_in_background: true)` spawn in the orchestrator now also passes `mode: "acceptEdits"`.
-3. **Dead frontmatter removed** — `permissionMode:` stripped from all five agent files (it was being silently ignored anyway).
+**Round 1 — agent delegation and permissions**
 
-Details of the fixes — including line-level changes — are tracked in `CLAUDE.md` under the "Lessons Learned" section.
+1. **Namespacing (Finding 1)** — `tools: Agent(...)`, every `subagent_type:` in the orchestrator, and every `claude --agent ...` invocation example now use the **3-part** name `dbt-pipeline-toolkit:<subdir>:<name>` (verified on a fresh install). An earlier attempt used the 2-part form from the docs example and was still broken.
+2. **Permission mode at call site (Findings 2 + 3)** — every `Task(..., run_in_background: true)` spawn in the orchestrator now also passes `mode: "acceptEdits"`.
+3. **Dead frontmatter removed (Finding 2)** — `permissionMode:` stripped from all five agent files (it was being silently ignored anyway).
+
+**Round 2 — userConfig env var remap**
+
+4. **Env var fallback helper (Finding 5)** — added `_load_plugin_userconfig_env()` to five Python scripts (`connect.py`, `query_sql_server.py`, `profile_data.py`, `load_data.py`, `initialize_project.py`). The helper runs at module load time, before `argparse` evaluates its defaults, and copies `CLAUDE_PLUGIN_OPTION_<KEY>` → `<KEY>` for every SQL connection variable.
+
+Not yet fixed:
+
+- **Finding 4** — needs README documentation spelling out that the orchestrator must be launched as the main thread via `claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator`.
+- **Finding 5, Problem B** — the "no install-time prompt" mystery. Needs investigation into whether stripping `title` / `type` from the `userConfig` entries restores the prompt, and whether Claude Code version differences are involved.
+
+Details of each fix — including line-level changes and regression-prevention rules — are tracked in `CLAUDE.md` under the "Lessons Learned" section.
 
 ---
 
@@ -202,5 +336,8 @@ Details of the fixes — including line-level changes — are tracked in `CLAUDE
 - Should the plugin ship a `settings.json` with a `subagentStatusLine` that makes background agent progress visible to the user? That would at least help diagnose stalled workers.
 - Is there a way to validate plugin frontmatter offline — catching a stray `permissionMode` before it ships?
 - How should the README document the invocation command so users can't miss it? A big fence at the top? A `/plugin install` post-install hook that prints usage?
+- **Why did `userConfig` not prompt the user on install or update?** Is it the undocumented `title` / `type` fields in each entry, the "Leave empty to..." phrasing in the descriptions, a Claude Code version difference, or something else? Needs a minimal-reproduction test.
+- Would it be worth adding a `SessionStart` hook that detects missing SQL connection env vars and prints a clear setup message, as a safety net in case the prompt never fires?
+- Should `connect.py` become a proper plugin-internal library instead of living under `skills/sql-connection/` without a `SKILL.md`? Right now it's in skill-land but isn't actually a skill.
 
-Worth a live demo slide in the talk: show the "broken" behavior (orchestrator stalls), then the fix, then the working run, side-by-side.
+Worth a live demo slide in the talk: show the "broken" behavior (orchestrator stalls or Python scripts connect to `localhost` with no database), then the fix, then the working run, side-by-side.

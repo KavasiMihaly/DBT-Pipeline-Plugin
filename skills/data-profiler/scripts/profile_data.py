@@ -21,6 +21,29 @@ from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.engine import URL
 
 
+def _load_plugin_userconfig_env():
+    """Map CLAUDE_PLUGIN_OPTION_<KEY> -> <KEY> for SQL connection env vars.
+
+    Claude Code plugin subprocesses receive userConfig values as
+    CLAUDE_PLUGIN_OPTION_<KEY> environment variables, but this script expects
+    bare names (e.g. SQL_SERVER). Must run before argparse defaults are
+    evaluated in main(), so it lives at module level.
+    """
+    keys = (
+        'SQL_SERVER', 'SQL_DATABASE', 'SQL_AUTH_TYPE', 'SQL_USER', 'SQL_PASSWORD',
+        'SQL_ENCRYPT', 'SQL_TRUST_CERT', 'SQL_DRIVER',
+        'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET',
+    )
+    for key in keys:
+        if not os.environ.get(key):
+            fallback = os.environ.get(f'CLAUDE_PLUGIN_OPTION_{key}')
+            if fallback:
+                os.environ[key] = fallback
+
+
+_load_plugin_userconfig_env()
+
+
 class DataProfiler:
     """Intelligent data profiling for SQL Server tables and CSV files."""
 

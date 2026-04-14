@@ -70,13 +70,19 @@ reference/             # Style guides and model examples
 
 Running notes on issues discovered while building and installing this plugin on fresh machines. Every entry includes the change, the reason, and the date. Full context and conference-talk narrative: [`_Documentation/plugin_learnings.md`](_Documentation/plugin_learnings.md).
 
-### 2026-04-14 — Namespace every agent reference to `dbt-pipeline-toolkit:<name>`
+### 2026-04-14 — Namespace every agent reference to `dbt-pipeline-toolkit:<dir>:<name>` (3-part)
 
-**Change:** In `agents/dbt-pipeline-orchestrator/agent.md`, the `tools: Agent(...)` allowlist and every `subagent_type:` in the workflow body were updated from bare names (e.g. `business-analyst`) to namespaced names (e.g. `dbt-pipeline-toolkit:business-analyst`).
+**Change:** In `agents/dbt-pipeline-orchestrator/agent.md`, the `tools: Agent(...)` allowlist, every `subagent_type:` in the workflow body, and every `claude --agent ...` invocation example were updated from bare names (e.g. `business-analyst`) to 3-part namespaced names (e.g. `dbt-pipeline-toolkit:business-analyst:business-analyst`). Because every agent in this plugin has a frontmatter `name` that matches its subdirectory name, every 3-part name has a duplicated middle+last segment — that's expected, not a typo.
 
-**Reason:** Claude Code namespaces plugin-shipped agents as `<plugin-name>:<agent-name>` once installed. The marketplace name is **not** part of the namespace — only the plugin name. Bare-name references worked in local dev (where agents live in `.claude/agents/` or via `--plugin-dir`) but produced an empty `Agent(...)` allowlist once installed from the marketplace. The orchestrator would run, spawn nothing, and appear frozen.
+**Reason:** Claude Code namespaces plugin-shipped agents as `<plugin-name>:<subdir>:<frontmatter-name>` when the agent lives in a subdirectory like `agents/<dir>/agent.md`. **This contradicts the official Claude Code plugins reference**, which shows a 2-part format (`<plugin-name>:<agent-name>`) in its example — but the docs example uses flat files at `agents/<name>.md`, not subdirectories. We verified the actual 3-part behavior by installing the plugin on a fresh machine and observing the registered agent name in the `/agents` picker. An initial fix applied 2-part names based on the docs example and was still broken; testing on a fresh install caught it.
 
-**How to avoid regression:** Any new agent added to this plugin must be referenced from the orchestrator as `dbt-pipeline-toolkit:<name>` in both the tools allowlist and every `subagent_type:` call. Never use bare names for intra-plugin delegation.
+The marketplace name is **not** part of the namespace — only the plugin name (`dbt-pipeline-toolkit`), the subdirectory, and the frontmatter name.
+
+**How to avoid regression:**
+- Any new agent added to this plugin must be referenced as `dbt-pipeline-toolkit:<subdir>:<frontmatter-name>` in the orchestrator's `tools: Agent(...)` allowlist and every `subagent_type:` call.
+- Keep the subdirectory name and the frontmatter `name` field identical — if they diverge, the registered name will silently become `<plugin>:<old-dir>:<new-name>` and every reference in the orchestrator will break without a clear error.
+- The orchestrator itself is invoked as `claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator "..."` — not the shorter 2-part form, even though the docs example suggests otherwise.
+- **Always verify the actual registered name on a fresh install** — check `/agents` or the plugin picker, don't trust the docs example.
 
 ### 2026-04-14 — Pass `mode: "acceptEdits"` on every background `Task(...)` spawn
 
@@ -93,6 +99,16 @@ Running notes on issues discovered while building and installing this plugin on 
 **Reason:** The Claude Code plugins reference explicitly lists `permissionMode` as **not supported for plugin-shipped agents** — "for security reasons, `hooks`, `mcpServers`, and `permissionMode` are not supported." Leaving those lines in the frontmatter is misleading because they imply behavior that never takes effect once installed. They also hid the real problem (Finding 2 above) during development. Permission control now happens at the call site via the orchestrator's `mode: "acceptEdits"` parameter.
 
 **How to avoid regression:** Never add `permissionMode`, `hooks`, or `mcpServers` fields to any agent frontmatter in this repo. Those concerns belong in `plugin.json` (for plugin-level hooks and MCP servers) or at the spawn call site (for per-invocation permission mode).
+
+### 2026-04-14 — Remap `CLAUDE_PLUGIN_OPTION_*` env vars to bare names in every SQL-aware Python script
+
+**Change:** Added a `_load_plugin_userconfig_env()` helper at module top of five scripts: `skills/sql-connection/scripts/connect.py`, `skills/sql-server-reader/scripts/query_sql_server.py`, `skills/data-profiler/scripts/profile_data.py`, `skills/sql-executor/scripts/load_data.py`, `skills/dbt-project-initializer/scripts/initialize_project.py`. The helper runs at module load, before `argparse` evaluates its defaults, and copies `CLAUDE_PLUGIN_OPTION_<KEY>` → `<KEY>` for every SQL connection variable (`SQL_SERVER`, `SQL_DATABASE`, `SQL_AUTH_TYPE`, `SQL_USER`, `SQL_PASSWORD`, `SQL_ENCRYPT`, `SQL_TRUST_CERT`, `SQL_DRIVER`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`).
+
+**Reason:** Claude Code plugin subprocesses receive `userConfig` values as `CLAUDE_PLUGIN_OPTION_<KEY>` environment variables — **not** as the bare names the plugin's own code expects. The MCP server in `plugin.json` works because its `mcpServers.sql-server-mcp.env` block explicitly maps `${user_config.sql_server}` → `SQL_SERVER`. But the Python skill scripts run as separate subprocesses spawned via `Bash` tool calls, not inside the MCP server, and they only see the prefixed env vars. On a fresh install the MCP tools appeared to work (because they live inside the Node server), creating a false sense that the connection was good — but every skill script silently fell back to `localhost` with no database, which in turn caused background builder agents to stall at Stage 6 with no useful error. The duplicate helper across five files (instead of a single shared import) is necessary because three consumer scripts import `connect.py` **lazily** inside their `.connect()` methods, which runs after `argparse` has already evaluated its defaults — putting the helper only in `connect.py` would not fix them.
+
+**How to avoid regression:** Any new Python script in this plugin that reads `SQL_*` or `AZURE_*` environment variables **must** include the `_load_plugin_userconfig_env()` helper at module top, before any `os.environ.get('SQL_*', ...)` call. When adding a new env var to the plugin's `userConfig` block in `plugin.json`, also add its name to the `keys` tuple in every copy of the helper. A follow-up worth doing: convert `skills/sql-connection/` into a proper importable package so the helper can live in one place — but the import must be eager and happen before argparse, otherwise the fix is incomplete.
+
+**Related open issue (not yet fixed):** During install and update of this plugin on a fresh machine, Claude Code did **not** surface the interactive prompt for `userConfig` fields. Hypotheses include the undocumented `title` / `type` fields in each userConfig entry, the "Leave empty to..." phrasing in descriptions, or a Claude Code version difference. Until the root cause is identified and fixed, users may need to set the config values manually in `settings.json` under `pluginConfigs.dbt-pipeline-toolkit.options` (and in the system keychain for sensitive values). This needs to be documented in the plugin README.
 
 ### General rule — test on a fresh install, not in dev
 

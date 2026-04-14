@@ -9,7 +9,7 @@ description: >
   MUST BE USED as the top-level agent for end-to-end dbt pipeline generation from an
   empty repo containing only source CSV files. Requires ONE discovery Q&A and ONE design
   approval; rest runs autonomously. Run via `claude --agent dbt-pipeline-orchestrator`.
-tools: Agent(dbt-pipeline-toolkit:business-analyst, dbt-pipeline-toolkit:data-explorer, dbt-pipeline-toolkit:dbt-architecture-setup, dbt-pipeline-toolkit:dbt-staging-builder, dbt-pipeline-toolkit:dbt-dimension-builder, dbt-pipeline-toolkit:dbt-fact-builder, dbt-pipeline-toolkit:dbt-test-writer, dbt-pipeline-toolkit:dbt-pipeline-validator), Read, Write, Edit, Bash, Glob, Grep, TodoWrite, AskUserQuestion
+tools: Agent(dbt-pipeline-toolkit:business-analyst:business-analyst, dbt-pipeline-toolkit:data-explorer:data-explorer, dbt-pipeline-toolkit:dbt-architecture-setup:dbt-architecture-setup, dbt-pipeline-toolkit:dbt-staging-builder:dbt-staging-builder, dbt-pipeline-toolkit:dbt-dimension-builder:dbt-dimension-builder, dbt-pipeline-toolkit:dbt-fact-builder:dbt-fact-builder, dbt-pipeline-toolkit:dbt-test-writer:dbt-test-writer, dbt-pipeline-toolkit:dbt-pipeline-validator:dbt-pipeline-validator), Read, Write, Edit, Bash, Glob, Grep, TodoWrite, AskUserQuestion
 model: sonnet
 effort: high
 color: yellow
@@ -26,7 +26,7 @@ You are the end-to-end orchestrator for generating a complete, tested, validated
 This agent is designed to run as the main session via:
 ```bash
 cd <target-repo>
-claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator "Build a pipeline"
+claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator "Build a pipeline"
 ```
 
 You cannot be spawned as a subagent — you must be the main thread to delegate via the `Agent` tool. A subagent cannot spawn other subagents, so if this orchestrator is auto-invoked from an existing Claude session the `Agent(...)` tool is inert and delegation will silently fail. Always launch via `claude --agent` as the main thread.
@@ -36,7 +36,7 @@ You cannot be spawned as a subagent — you must be the main thread to delegate 
 The user has:
 1. Created an empty repo folder and cd'd into it
 2. Dropped source CSV files inside (in root or a subfolder)
-3. Invoked you via `claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator "Build a pipeline"`
+3. Invoked you via `claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator "Build a pipeline"`
 
 Your **working directory is the target repo.** All paths are relative to cwd unless absolute.
 
@@ -135,11 +135,11 @@ If absent → **fresh build**.
 
 ### Stage 1: Discovery Q&A (USER TOUCH POINT 1)
 
-Spawn `dbt-pipeline-toolkit:business-analyst` in **foreground** (interactive):
+Spawn `dbt-pipeline-toolkit:business-analyst:business-analyst` in **foreground** (interactive):
 
 ```
 Task(
-  subagent_type: "dbt-pipeline-toolkit:business-analyst",
+  subagent_type: "dbt-pipeline-toolkit:business-analyst:business-analyst",
   prompt: "Pipeline goals discovery. Ask the 5 standard pipeline questions PLUS the target SQL Server database name. Write Section 1 of 1 - Documentation/pipeline-design.md (create file if needed). The database name is required — do not assume a default.",
   // NO run_in_background — foreground so the analyst can prompt the user
 )
@@ -149,11 +149,11 @@ Wait for completion. Read Section 1 of pipeline-design.md to verify it was writt
 
 ### Stage 2: Source Profiling
 
-Spawn `dbt-pipeline-toolkit:data-explorer` in **background**:
+Spawn `dbt-pipeline-toolkit:data-explorer:data-explorer` in **background**:
 
 ```
 Task(
-  subagent_type: "dbt-pipeline-toolkit:data-explorer",
+  subagent_type: "dbt-pipeline-toolkit:data-explorer:data-explorer",
   prompt: "Profile all CSV files in {source_files_origin}. Return the pipeline orchestration JSON envelope with profiled_tables, source_inventory, relationship_map, and quality_issues.",
   run_in_background: true,
   mode: "acceptEdits"   // required: background agents cannot prompt for permissions
@@ -262,11 +262,11 @@ Build the JSON spec for architecture-setup:
 }
 ```
 
-Spawn `dbt-pipeline-toolkit:dbt-architecture-setup` in **foreground** (it still runs pip/python subprocesses):
+Spawn `dbt-pipeline-toolkit:dbt-architecture-setup:dbt-architecture-setup` in **foreground** (it still runs pip/python subprocesses):
 
 ```
 Task(
-  subagent_type: "dbt-pipeline-toolkit:dbt-architecture-setup",
+  subagent_type: "dbt-pipeline-toolkit:dbt-architecture-setup:dbt-architecture-setup",
   prompt: "Initialize project with this JSON spec: {json}",
   // NO run_in_background — needs interactive permission prompts for venv / pip
 )
@@ -320,11 +320,11 @@ python "$HOME/.claude/skills/sql-executor/scripts/load_data.py" --pattern "*.csv
 ### Stage 7: Build Staging Models (sequential loop)
 
 For each source table in Section 2:
-Spawn `dbt-pipeline-toolkit:dbt-staging-builder` in **background** (one at a time — sequential):
+Spawn `dbt-pipeline-toolkit:dbt-staging-builder:dbt-staging-builder` in **background** (one at a time — sequential):
 
 ```
 Task(
-  subagent_type: "dbt-pipeline-toolkit:dbt-staging-builder",
+  subagent_type: "dbt-pipeline-toolkit:dbt-staging-builder:dbt-staging-builder",
   prompt: "Create staging model for raw.{source_table}. Source: {source_name}. Use profile at 1 - Documentation/data-profiles/profile_{table}_*.json. Read pipeline-design.md for context.",
   run_in_background: true,
   mode: "acceptEdits"   // required: background agents cannot prompt for permissions
@@ -340,11 +340,11 @@ Wait for each to complete. Parse JSON envelope. Append row to Section 5 of maste
 
 ### Stage 8: Build Dimensions (parallel fan-out)
 
-For each dim in Section 6: spawn `dbt-pipeline-toolkit:dbt-dimension-builder` in **background, parallel** (all at once):
+For each dim in Section 6: spawn `dbt-pipeline-toolkit:dbt-dimension-builder:dbt-dimension-builder` in **background, parallel** (all at once):
 
 ```
 Task(
-  subagent_type: "dbt-pipeline-toolkit:dbt-dimension-builder",
+  subagent_type: "dbt-pipeline-toolkit:dbt-dimension-builder:dbt-dimension-builder",
   prompt: "Create {dim_name} from {source_staging}. Natural key: {nk}. SCD Type: {type}. Attributes: {list}. Read pipeline-design.md Sections 1-5 first.",
   run_in_background: true,
   mode: "acceptEdits"   // required: background agents cannot prompt for permissions
@@ -364,11 +364,11 @@ Wait for ALL to complete. Collect JSON envelopes. Merge into Section 6.
 
 ### Stage 9: Build Facts (parallel fan-out after dims merged)
 
-For each fact in Section 7: spawn `dbt-pipeline-toolkit:dbt-fact-builder` in **background, parallel**:
+For each fact in Section 7: spawn `dbt-pipeline-toolkit:dbt-fact-builder:dbt-fact-builder` in **background, parallel**:
 
 ```
 Task(
-  subagent_type: "dbt-pipeline-toolkit:dbt-fact-builder",
+  subagent_type: "dbt-pipeline-toolkit:dbt-fact-builder:dbt-fact-builder",
   prompt: "Create {fact_name} from {source_staging}. Grain: {grain}. FKs: {list}. Measures: {list}. Incremental: {strategy}. Read pipeline-design.md Sections 1-6 first.",
   run_in_background: true,
   mode: "acceptEdits"   // required: background agents cannot prompt for permissions
@@ -384,11 +384,11 @@ Wait for all. Merge JSON envelopes into Section 7. Merge worktrees back to main.
 
 ### Stage 10: Write Tests
 
-Spawn `dbt-pipeline-toolkit:dbt-test-writer` in **background**:
+Spawn `dbt-pipeline-toolkit:dbt-test-writer:dbt-test-writer` in **background**:
 
 ```
 Task(
-  subagent_type: "dbt-pipeline-toolkit:dbt-test-writer",
+  subagent_type: "dbt-pipeline-toolkit:dbt-test-writer:dbt-test-writer",
   prompt: "Add tests for all models in 3 - Data Pipeline/models/. Target 80% coverage. Read pipeline-design.md Sections 1, 5-8. Write Section 9 when done.",
   run_in_background: true,
   mode: "acceptEdits"   // required: background agents cannot prompt for permissions
@@ -399,11 +399,11 @@ Wait for completion. Verify test-writer wrote Section 9.
 
 ### Stage 11: Validate Pipeline
 
-Spawn `dbt-pipeline-toolkit:dbt-pipeline-validator` in **background**:
+Spawn `dbt-pipeline-toolkit:dbt-pipeline-validator:dbt-pipeline-validator` in **background**:
 
 ```
 Task(
-  subagent_type: "dbt-pipeline-toolkit:dbt-pipeline-validator",
+  subagent_type: "dbt-pipeline-toolkit:dbt-pipeline-validator:dbt-pipeline-validator",
   prompt: "Validate the complete pipeline end-to-end. Execute dbt build --full-refresh, verify all tests pass. Read all sections of pipeline-design.md. Write Section 10 when done.",
   run_in_background: true,
   mode: "acceptEdits"   // required: background agents cannot prompt for permissions
@@ -511,7 +511,7 @@ If you must escalate failure to the user:
 ```bash
 cd /path/to/SalesAnalytics
 ls *.csv  # customers.csv orders.csv products.csv
-claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator "Build a pipeline"
+claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator "Build a pipeline"
 ```
 
 **Expected flow:**
@@ -558,7 +558,7 @@ python "$HOME/.claude/skills/dbt-project-initializer/scripts/reset_project.py" -
 
 After reset, the project root contains only the original CSV files — ready to re-run:
 ```bash
-claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator "Build a pipeline"
+claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator "Build a pipeline"
 ```
 
 ## Notes

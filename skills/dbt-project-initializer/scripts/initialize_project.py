@@ -27,6 +27,29 @@ from pathlib import Path
 from string import Template
 
 
+def _load_plugin_userconfig_env():
+    """Map CLAUDE_PLUGIN_OPTION_<KEY> -> <KEY> for SQL connection env vars.
+
+    Claude Code plugin subprocesses receive userConfig values as
+    CLAUDE_PLUGIN_OPTION_<KEY> environment variables, but this script expects
+    bare names (e.g. SQL_SERVER). Must run before any SQL_* env var read, so
+    it lives at module level.
+    """
+    keys = (
+        'SQL_SERVER', 'SQL_DATABASE', 'SQL_AUTH_TYPE', 'SQL_USER', 'SQL_PASSWORD',
+        'SQL_ENCRYPT', 'SQL_TRUST_CERT', 'SQL_DRIVER',
+        'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET',
+    )
+    for key in keys:
+        if not os.environ.get(key):
+            fallback = os.environ.get(f'CLAUDE_PLUGIN_OPTION_{key}')
+            if fallback:
+                os.environ[key] = fallback
+
+
+_load_plugin_userconfig_env()
+
+
 def sanitize_name(name: str) -> str:
     """Convert project name to valid dbt project name (lowercase, underscores)."""
     # Replace spaces and hyphens with underscores
