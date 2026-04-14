@@ -9,7 +9,7 @@ description: >
   to start implementing.
 tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 model: sonnet
-skills: dbt-project-initializer
+skills: dbt-pipeline-toolkit:dbt-project-initializer
 color: yellow
 maxTurns: 50
 ---

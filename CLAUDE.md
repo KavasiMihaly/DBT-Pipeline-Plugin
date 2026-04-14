@@ -173,6 +173,35 @@ Files modified:
 
 **Caveat — needs empirical verification on next fresh install:** We're >90% confident `${CLAUDE_PLUGIN_ROOT}` is substituted inline in agent and skill markdown body content (the plugins-reference doc says so, and `plugin.json` already uses it successfully for the MCP server path). The remaining risk is that substitution might only happen in `plugin.json` / hook / MCP configs and not in markdown body. If that turns out to be the case, the next fresh-install run will still fail to find the scripts — the failure mode would be Bash seeing a literal `${CLAUDE_PLUGIN_ROOT}` with no env var set, and the file not resolving. Fallback plan: add a `SessionStart` hook that exports `PLUGIN_ROOT=$CLAUDE_PLUGIN_ROOT` to the shell environment, then change the markdown references from `${CLAUDE_PLUGIN_ROOT}` to `$PLUGIN_ROOT` so the bash subprocess can resolve it. Worth testing the current fix first before preemptively adding the hook.
 
+### 2026-04-14 — Agent `skills:` frontmatter must use 2-part `dbt-pipeline-toolkit:<skill>` namespace
+
+**Change:** Every `skills:` field in all 8 plugin agent files was rewritten from bare skill names (e.g. `dbt-runner, data-profiler, sql-server-reader`) to the 2-part plugin namespace format (`dbt-pipeline-toolkit:dbt-runner, dbt-pipeline-toolkit:data-profiler, dbt-pipeline-toolkit:sql-server-reader`). This field controls which skills are preloaded into a subagent's context when it spawns.
+
+**Reason:** Plugin skills are registered under a 2-part namespace `<plugin-name>:<skill-directory>`, per the official Claude Code skills docs:
+
+> "Plugin skills use a `plugin-name:skill-name` namespace, so they cannot conflict with other levels."
+
+This is a **different format from plugin agents**, which in this plugin use a 3-part namespace `<plugin>:<subdir>:<frontmatter-name>` because agents live in subdirectories rather than as flat files. The rule is really that each directory level under `agents/` or `skills/` contributes one namespace segment on top of the plugin name. Skills in this plugin are at `skills/<name>/SKILL.md` (depth 1 under `skills/`), giving 2-part names. Agents in this plugin are at `agents/<name>/agent.md` (depth 1 under `agents/` too, but Claude Code also appends the frontmatter `name` as a third segment — a subtlety that only applies to agent discovery, not skill discovery).
+
+Bare-name skill references were failing silently: when an agent declared `skills: data-profiler` and spawned as a subagent, Claude Code resolved "data-profiler" against the plugin-namespace and found nothing. The preload produced an empty skill list, and the specialist started without any of the skill context it was designed to have. This was another silent capability-degradation bug — no error, just quietly less-effective specialists.
+
+**How to avoid regression:**
+- **Any new `skills:` field entry** added to an agent in this plugin must use `dbt-pipeline-toolkit:<skill-dir-name>` — 2 segments, not 3.
+- **Do not confuse skill and agent namespacing.** Skills are 2-part (`dbt-pipeline-toolkit:data-profiler`). Agents are 3-part (`dbt-pipeline-toolkit:data-explorer:data-explorer`). The formats are not unified.
+- **Keep skill directory names descriptive.** Since the directory name becomes the public skill name, renaming a skill directory is a breaking change for every agent that preloads it.
+
+### 2026-04-14 — "Locked by plugin" clarification
+
+**What it means:** Skills (and agents, commands, hooks) that come from an installed plugin appear in the Claude Code UI marked as "locked by plugin." This label indicates:
+
+1. The skill is **owned by the plugin system** and lives in `~/.claude/plugins/cache/<id>/skills/<name>/`, not the user's `~/.claude/skills/` directory.
+2. **The user cannot edit it in place** — the plugin cache is rewritten on every `claude plugin update`, so local edits would be destroyed.
+3. Its **lifecycle is tied to the plugin**: install adds it, uninstall removes it, update replaces it.
+4. It **cannot be overridden by same-name personal or project skills** because plugin skills live in their own `plugin-name:skill-name` namespace — no conflict possible.
+5. **To customize, users must fork the plugin**, not hand-edit the cached copy. Same pattern as `node_modules/` or `site-packages/` — managed code, not sandbox.
+
+**Implication for plugin authors:** Plugin releases are production deploys from the user's perspective. Users have no in-place escape hatch for plugin bugs. This raises the bar for pre-release testing on fresh installs — there is no customer-side workaround for shipping a broken plugin.
+
 ### General rule — test on a fresh install, not in dev
 
 Every finding above was invisible during local development (`--plugin-dir` or direct `.claude/agents/` drop) and only surfaced after installing from the marketplace on a second machine. Before shipping any plugin change that touches agent definitions, orchestration, or permission flow:

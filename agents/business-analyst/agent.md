@@ -11,7 +11,7 @@ description: >
 tools: Read, Write, Grep, Glob, WebFetch, WebSearch, AskUserQuestion
 model: sonnet
 memory: user
-skills: sql-server-reader, data-profiler
+skills: dbt-pipeline-toolkit:sql-server-reader, dbt-pipeline-toolkit:data-profiler
 color: orange
 effort: high
 maxTurns: 60

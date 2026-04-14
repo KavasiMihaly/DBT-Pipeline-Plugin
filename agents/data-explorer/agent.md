@@ -9,7 +9,7 @@ description: >
 tools: Read, Bash, Grep, Glob
 model: haiku
 memory: user
-skills: data-profiler
+skills: dbt-pipeline-toolkit:data-profiler
 color: cyan
 background: true
 disallowedTools: Write, Edit

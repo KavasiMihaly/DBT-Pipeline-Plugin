@@ -8,7 +8,7 @@ description: >
   complete to verify the solution works correctly.
 tools: Read, Write, Bash, Grep, Glob
 model: sonnet
-skills: dbt-runner, sql-executor, data-profiler, sql-server-reader, dbt-test-coverage-analyzer
+skills: dbt-pipeline-toolkit:dbt-runner, dbt-pipeline-toolkit:sql-executor, dbt-pipeline-toolkit:data-profiler, dbt-pipeline-toolkit:sql-server-reader, dbt-pipeline-toolkit:dbt-test-coverage-analyzer
 color: blue
 maxTurns: 60
 memory: project

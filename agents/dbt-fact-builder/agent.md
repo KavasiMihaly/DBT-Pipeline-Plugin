@@ -8,7 +8,7 @@ description: >
   for star schema.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
-skills: dbt-runner, data-profiler, sql-server-reader
+skills: dbt-pipeline-toolkit:dbt-runner, dbt-pipeline-toolkit:data-profiler, dbt-pipeline-toolkit:sql-server-reader
 color: blue
 isolation: worktree
 maxTurns: 50

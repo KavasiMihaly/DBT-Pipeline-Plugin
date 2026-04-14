@@ -7,7 +7,7 @@ description: >
   creating the first transformation layer from raw source tables.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: haiku
-skills: dbt-runner, data-profiler, sql-server-reader
+skills: dbt-pipeline-toolkit:dbt-runner, dbt-pipeline-toolkit:data-profiler, dbt-pipeline-toolkit:sql-server-reader
 color: blue
 maxTurns: 50
 memory: project

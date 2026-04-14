@@ -427,9 +427,104 @@ This is the quietest failure mode of the entire build: the orchestrator ran, the
 
 ---
 
-## Finding 8 — Development vs installed behavior diverges
+## Finding 8 — Plugin skills and agents use different namespace formats (2-part vs 3-part), and plugin skills appear as "locked"
 
-A theme across all seven preceding findings: **the plugin behaves differently when you're developing it vs. when it's installed from a marketplace**. During dev you can point Claude Code at the plugin directory with `--plugin-dir ./`, or drop the agents into `.claude/agents/`, and everything works under bare names with full `permissionMode` support. Install the same plugin on a fresh machine via the marketplace and half of your assumptions silently break.
+### What I learned
+
+After confirming that plugin agents are registered with **three** namespace segments (`<plugin>:<subdir>:<frontmatter-name>` — see Finding 1), I assumed plugin skills would follow the same pattern. They don't. Plugin skills use **exactly two** segments:
+
+```
+dbt-pipeline-toolkit:data-profiler
+     ^                    ^
+plugin name         skill directory name
+```
+
+That's it. No duplication. No frontmatter `name` segment. The skills docs say it plainly:
+
+> "Plugin skills use a `plugin-name:skill-name` namespace, so they cannot conflict with other levels."
+
+Why the asymmetry?
+
+- **Skills are flat single-directory units.** A skill lives at `skills/<name>/SKILL.md`, and the `<name>` directory is always the skill's identifier. There's no intermediate level where a subdirectory could become a separate namespace segment — the directory *is* the skill.
+- **Agents in this plugin live in subdirectories** (`agents/<name>/agent.md`), and Claude Code uses the subdirectory as a distinct namespace level above the frontmatter `name` field. If the plugin used flat `agents/<name>.md` files (the layout shown in the official docs example), agents would also be 2-part. The 3-part form is a consequence of this plugin's directory-based agent layout.
+
+So the rule is really: **the number of namespace segments equals the depth of the file relative to `agents/` or `skills/`**, plus one for the plugin name. Flat skill files under `skills/<name>/SKILL.md` give 2 segments. Nested agent files under `agents/<name>/agent.md` give 3 segments. If you nested skills like `skills/<category>/<skill>/SKILL.md`, you'd probably get 3-segment skill names too (untested, but consistent with the pattern).
+
+### "Locked by plugin" — what the UI label means
+
+The user also noticed that plugin skills show up in the Claude Code UI marked as **"locked by plugin."** The skills docs don't use that exact phrase, but the meaning is inferable from how plugins work:
+
+1. **The skill is owned by the plugin system.** It lives in the plugin cache (`~/.claude/plugins/cache/<id>/skills/<name>/`) rather than in the user's `~/.claude/skills/` directory.
+2. **The user cannot edit it in place.** The plugin cache is managed by Claude Code — specifically, any version of a plugin that is replaced by an update is marked orphaned and removed automatically 7 days later. Local edits would be overwritten the next time the plugin updates.
+3. **Its lifecycle is tied to the plugin's lifecycle.** Installing the plugin adds the skill; uninstalling removes it; `claude plugin update` replaces it with the new version from the marketplace.
+4. **It cannot be overridden by a same-name personal or project skill**, because plugin skills live in their own `plugin-name:skill-name` namespace. Your personal `~/.claude/skills/data-profiler/SKILL.md` and the plugin's `dbt-pipeline-toolkit:data-profiler` coexist without conflict.
+5. **The canonical way to customize a plugin skill is to fork the plugin**, not to hand-edit the cached version. This is the same pattern that package managers use — you don't edit files inside `node_modules/` or `site-packages/`, you override at a higher level or fork upstream.
+
+"Locked" is essentially the plugin system's way of saying "this is managed code, not your sandbox." Which is the right default for anything shipping through a distribution mechanism.
+
+### How it broke
+
+The `skills:` frontmatter field in every agent declaration looked like this:
+
+```yaml
+skills: dbt-runner, data-profiler, sql-server-reader
+```
+
+The `skills:` field in an agent's frontmatter is the "preload skills into subagents" mechanism — at spawn time, Claude Code loads the named skills' content into the subagent's context so the subagent can use them without re-loading per call. When the agent is plugin-shipped, the bare names (`dbt-runner`, `data-profiler`, `sql-server-reader`) don't match any registered skill — Claude Code resolves them against the same plugin-name:skill-name namespace used by the picker, and bare names resolve to nothing. The preload silently produces an empty skill list, and the specialist agent starts without any of the skill context it was designed around.
+
+This is a quieter version of the same class of bug as the earlier agent-namespace issue (Finding 1) and the script-path issue (Finding 7): the agent reference resolves against a different namespace than the one the author had in mind, the resolution fails silently, and the agent runs with degraded capability instead of failing loudly.
+
+What we don't know — and this needs empirical verification — is whether the `skills:` preload was actually contributing anything the specialist agents needed at runtime, or whether the specialists were functioning with their own agent.md body content as the only source of instruction. Possibly the "dbt-staging-builder works fine without its skills preloaded" theory is true, in which case fixing this issue is a correctness improvement without a visible behavior change. Possibly the theory is false, and the specialists have been subtly under-equipped across the entire test. We haven't disentangled the two, because the plugin has been failing on so many other axes that it's hard to isolate which fix unlocked which capability.
+
+### Fix applied
+
+Every `skills:` field in all 8 plugin agent files rewritten to use the 2-part namespace:
+
+```yaml
+# Before
+skills: dbt-runner, data-profiler, sql-server-reader
+
+# After
+skills: dbt-pipeline-toolkit:dbt-runner, dbt-pipeline-toolkit:data-profiler, dbt-pipeline-toolkit:sql-server-reader
+```
+
+Files updated:
+- `agents/data-explorer/agent.md`
+- `agents/business-analyst/agent.md`
+- `agents/dbt-architecture-setup/agent.md`
+- `agents/dbt-staging-builder/agent.md`
+- `agents/dbt-dimension-builder/agent.md`
+- `agents/dbt-fact-builder/agent.md`
+- `agents/dbt-test-writer/agent.md`
+- `agents/dbt-pipeline-validator/agent.md`
+
+### Takeaway for the talk
+
+> **Namespacing is not uniform across Claude Code plugin concepts.** Skills are 2-part (`plugin:skill`) because skills are flat. Agents *in this plugin* are 3-part (`plugin:subdir:name`) because agents live in subdirectories. If the plugin used flat `agents/<name>.md`, agents would also be 2-part. There's no single "plugin namespacing rule" to memorize — there's a rule about **directory depth translating to namespace segments**, and skills just happen to always have depth 1.
+>
+> The implication for talk audiences is: **every time you reference something from a plugin — an agent, a skill, a command, a hook, a script path — ask yourself what the exact registered name looks like on a fresh install.** Do not assume. Verify in the picker, verify in `/skills`, verify in the command list. The rules are context-dependent and the docs are incomplete.
+
+### Plus: the "locked by plugin" lesson for the talk
+
+This is worth a quick aside in the part of the talk about plugin ergonomics. "Locked by plugin" is a good thing — it's the plugin system protecting the plugin author's contract. But it also means **users cannot patch around your bugs locally.** If your plugin ships broken on a fresh install, users don't have an escape hatch to fix it in place. They have to uninstall, fork, or wait for an update.
+
+That raises the bar for plugin release quality. Every plugin release should be treated like a production deploy, not a dev push — because that's exactly what it is from the user's perspective. Worth emphasizing in the talk: **plugin skills are not your sandbox; they are shipped artifacts**, and you should test them with that frame of mind.
+
+### Future optimization worth considering
+
+The skills docs mention a skill-scoped variable `${CLAUDE_SKILL_DIR}`:
+
+> "The directory containing the skill's `SKILL.md` file. For plugin skills, this is the skill's subdirectory within the plugin, not the plugin root. Use this in bash injection commands to reference scripts or files bundled with the skill, regardless of the current working directory."
+
+This is more idiomatic than `${CLAUDE_PLUGIN_ROOT}/skills/<name>/` inside a SKILL.md, because it doesn't hardcode the skill's own name inside its own instructions. The script-path fix from Finding 7 could be refined further in SKILL.md files to use `${CLAUDE_SKILL_DIR}/scripts/<file>.py` — but only inside SKILL.md. Agent bodies still need `${CLAUDE_PLUGIN_ROOT}/skills/<skill-name>/scripts/<file>.py` because `${CLAUDE_SKILL_DIR}` isn't available in agent content (it's scoped to the currently-active skill, which is an inapplicable concept for an agent definition).
+
+Not a correctness issue — the current form works. Just a cleanliness improvement for a later pass.
+
+---
+
+## Finding 9 — Development vs installed behavior diverges
+
+A theme across all eight preceding findings: **the plugin behaves differently when you're developing it vs. when it's installed from a marketplace**. During dev you can point Claude Code at the plugin directory with `--plugin-dir ./`, or drop the agents into `.claude/agents/`, and everything works under bare names with full `permissionMode` support. Install the same plugin on a fresh machine via the marketplace and half of your assumptions silently break.
 
 Specific divergences I hit:
 
@@ -474,6 +569,10 @@ The findings above were addressed in two passes on the repo:
 **Round 3 — plugin-internal script paths**
 
 5. **Script path root fix (Finding 7)** — every Python script invocation in every agent body and every SKILL.md usage example now uses `${CLAUDE_PLUGIN_ROOT}/skills/<name>/scripts/<file>.py` instead of `$HOME/.claude/skills/<name>/scripts/<file>.py`. 183 occurrences across 11 files in a single mechanical pass, plus a second pass to normalize 162 Windows-cmd backslash separators (`\scripts\`) to forward slashes.
+
+**Round 4 — agent skill frontmatter namespacing**
+
+6. **Skill preload namespace (Finding 8)** — every agent's `skills:` frontmatter field now uses the 2-part `dbt-pipeline-toolkit:<name>` format instead of bare names. 8 files updated. This is the format for skill preloading and is different from the 3-part agent namespace (which has an extra segment because agents live in subdirectories while skills are flat).
 
 Not yet fixed:
 
