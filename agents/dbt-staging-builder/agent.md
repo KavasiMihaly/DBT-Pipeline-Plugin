@@ -9,7 +9,6 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 model: haiku
 skills: dbt-runner, data-profiler, sql-server-reader
 color: blue
-permissionMode: acceptEdits
 maxTurns: 50
 memory: project
 ---

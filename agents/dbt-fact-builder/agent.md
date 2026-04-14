@@ -10,7 +10,6 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
 skills: dbt-runner, data-profiler, sql-server-reader
 color: blue
-permissionMode: acceptEdits
 isolation: worktree
 maxTurns: 50
 memory: project

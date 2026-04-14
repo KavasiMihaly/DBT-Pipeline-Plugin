@@ -149,3 +149,9 @@
 {"ts": "2026-04-12T16:03:56.946849+00:00", "event": "PreToolUse", "session_id": "415b0312-ed34-4aec-9332-848ddaa6cb61", "tool": "Write", "summary": "write \u2192 C:\\Users\\kavas\\Documents\\GitHub\\DBT Pipeline Plugin\\.claude-plugin\\plugin.json", "details": {"file_path": "C:\\Users\\kavas\\Documents\\GitHub\\DBT Pipeline Plugin\\.claude-plugin\\plugin.json"}}
 {"ts": "2026-04-12T16:03:57.094512+00:00", "event": "PostToolUse", "session_id": "415b0312-ed34-4aec-9332-848ddaa6cb61", "tool": "Write", "summary": "write \u2192 C:\\Users\\kavas\\Documents\\GitHub\\DBT Pipeline Plugin\\.claude-plugin\\plugin.json", "status": "success"}
 {"ts": "2026-04-12T16:04:04.752501+00:00", "event": "Stop", "session_id": "415b0312-ed34-4aec-9332-848ddaa6cb61", "stop_hook_active": false}
+{"ts": "2026-04-12T16:05:11.418499+00:00", "event": "UserPromptSubmit", "session_id": "415b0312-ed34-4aec-9332-848ddaa6cb61", "prompt": "reload-plugins"}
+{"ts": "2026-04-12T16:05:16.442675+00:00", "event": "Stop", "session_id": "415b0312-ed34-4aec-9332-848ddaa6cb61", "stop_hook_active": false}
+{"ts": "2026-04-12T16:05:52.173212+00:00", "event": "UserPromptSubmit", "session_id": "415b0312-ed34-4aec-9332-848ddaa6cb61", "prompt": "\b\b\b\b\bhow to remove the plugin?"}
+{"ts": "2026-04-12T16:05:56.297629+00:00", "event": "Stop", "session_id": "415b0312-ed34-4aec-9332-848ddaa6cb61", "stop_hook_active": false}
+{"ts": "2026-04-12T16:06:42.621847+00:00", "event": "UserPromptSubmit", "session_id": "415b0312-ed34-4aec-9332-848ddaa6cb61", "prompt": "deleted, did it work?"}
+{"ts": "2026-04-12T16:06:47.885848+00:00", "event": "Stop", "session_id": "415b0312-ed34-4aec-9332-848ddaa6cb61", "stop_hook_active": false}
