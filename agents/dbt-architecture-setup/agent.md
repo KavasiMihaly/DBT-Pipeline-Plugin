@@ -53,10 +53,10 @@ Initialize new data engineering projects with:
 **Usage**:
 ```bash
 # Interactive mode (recommended)
-python "$HOME/.claude/skills/dbt-project-initializer/scripts/initialize_project.py" --target "/path/to/new/project"
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/initialize_project.py" --target "/path/to/new/project"
 
 # Non-interactive mode
-python "$HOME/.claude/skills/dbt-project-initializer/scripts/initialize_project.py" \
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/initialize_project.py" \
   --target "/path/to/new/project" \
   --name "project_name" \
   --database "DatabaseName" \
@@ -127,7 +127,7 @@ Before creating files, verify:
 Run the dbt-project-initializer skill:
 
 ```bash
-python "$HOME/.claude/skills/dbt-project-initializer/scripts/initialize_project.py" \
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/initialize_project.py" \
   --target "<target_path>" \
   --name "<project_name>" \
   --database "<database>" \

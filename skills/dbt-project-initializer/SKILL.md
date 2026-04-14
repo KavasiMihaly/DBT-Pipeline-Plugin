@@ -24,7 +24,7 @@ This skill creates a fully configured project structure for dbt + SQL Server + P
 Run the initialization script interactively:
 
 ```bash
-python "$HOME/.claude/skills/dbt-project-initializer\scripts\initialize_project.py" --target "C:\path\to\new\project"
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/initialize_project.py" --target "C:\path\to\new\project"
 ```
 
 The script will prompt for:
@@ -38,7 +38,7 @@ The script will prompt for:
 Provide all parameters via command line:
 
 ```bash
-python "$HOME/.claude/skills/dbt-project-initializer\scripts\initialize_project.py" \
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/initialize_project.py" \
   --target "C:\path\to\new\project" \
   --name "sales_analytics" \
   --database "SalesDB" \

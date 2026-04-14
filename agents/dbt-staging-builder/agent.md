@@ -100,7 +100,7 @@ Before referencing columns in staging models, **ALWAYS** verify actual column na
 
 ```bash
 # Use sql-server-reader to check actual column names
-python "$HOME/.claude/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'raw' AND TABLE_NAME = 'your_table' ORDER BY ORDINAL_POSITION"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'raw' AND TABLE_NAME = 'your_table' ORDER BY ORDINAL_POSITION"
 ```
 
 Or use the MCP tool directly:
@@ -117,7 +117,7 @@ mcp__sql-server-mcp__get_table_schema --tableName "raw.your_table"
 
 **When to use**: ALWAYS use before creating a staging model
 ```bash
-python "$HOME/.claude/skills/data-profiler/scripts/profile_data.py" --table raw_table_name --verbose
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table raw_table_name --verbose
 ```
 
 **Provides**:
@@ -266,7 +266,7 @@ The data-profiler skill provides intelligence for staging model decisions:
 
 1. **Profile the source table**:
    ```bash
-   python "$HOME/.claude/skills/data-profiler/scripts/profile_data.py" --table raw_customers
+   python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table raw_customers
    ```
 
 2. **Interpret profile results**:
@@ -288,10 +288,10 @@ See `Agents/reference/examples/staging-models.md` for complete profile-driven de
 
 ```bash
 # Check which schema the table is in (usually 'raw' for sql-executor loads)
-python "$HOME/.claude/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME LIKE '%your_table%'"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME LIKE '%your_table%'"
 
 # Get actual column names (these may differ from CSV headers!)
-python "$HOME/.claude/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'raw' AND TABLE_NAME = 'your_table' ORDER BY ORDINAL_POSITION"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'raw' AND TABLE_NAME = 'your_table' ORDER BY ORDINAL_POSITION"
 ```
 
 Or use MCP tool:
@@ -301,7 +301,7 @@ mcp__sql-server-mcp__get_table_schema --tableName "raw.your_table"
 
 ### Step 2: Profile Source Data
 ```bash
-python "$HOME/.claude/skills/data-profiler/scripts/profile_data.py" --table raw_source_table --schema raw --verbose
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table raw_source_table --schema raw --verbose
 ```
 
 Review profile output in `1 - Documentation/data-profiles/profile_TABLE_TIMESTAMP.json`

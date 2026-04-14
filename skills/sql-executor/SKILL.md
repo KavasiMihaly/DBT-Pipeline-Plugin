@@ -34,7 +34,7 @@ The skill is invoked through the Python script located in `scripts/load_data.py`
 ### Load CSV file into a table
 
 ```bash
-python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --file "source_data.csv" --table raw.source_table --schema raw
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --file "source_data.csv" --table raw.source_table --schema raw
 ```
 
 **What it does**:
@@ -46,7 +46,7 @@ python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --file "source_d
 ### Load multiple files with pattern matching
 
 ```bash
-python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --pattern "customer-*.csv" --table-prefix raw.customer --schema raw
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --pattern "customer-*.csv" --table-prefix raw.customer --schema raw
 ```
 
 **What it does**:
@@ -58,7 +58,7 @@ python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --pattern "custo
 ### Truncate table before loading
 
 ```bash
-python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --file "source_data.csv" --table raw.source_table --truncate
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --file "source_data.csv" --table raw.source_table --truncate
 ```
 
 **What it does**:
@@ -68,7 +68,7 @@ python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --file "source_d
 ### Execute custom SQL
 
 ```bash
-python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --execute "DELETE FROM raw.source_table WHERE status = 'inactive'"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --execute "DELETE FROM raw.source_table WHERE status = 'inactive'"
 ```
 
 **What it does**:
@@ -78,7 +78,7 @@ python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --execute "DELET
 ### Execute SQL from file
 
 ```bash
-python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --sql-file "scripts/cleanup.sql"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --sql-file "scripts/cleanup.sql"
 ```
 
 **What it does**:
@@ -203,28 +203,28 @@ sources:
 
 ```bash
 # Load source data for testing
-python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --file "source_data.csv" --table raw.source_table --schema raw --truncate
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --file "source_data.csv" --table raw.source_table --schema raw --truncate
 ```
 
 ### 2. Load multiple related files
 
 ```bash
 # Load all customer files from different regions
-python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --pattern "customer-*.csv" --table-prefix raw.customer --schema raw
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --pattern "customer-*.csv" --table-prefix raw.customer --schema raw
 ```
 
 ### 3. Clean up test data
 
 ```bash
 # Remove all data from test run
-python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --execute "TRUNCATE TABLE raw.source_table"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --execute "TRUNCATE TABLE raw.source_table"
 ```
 
 ### 4. Load specific file subset
 
 ```bash
 # Load only recent data files
-python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --pattern "*-202[45].csv" --table-prefix raw.data --schema raw
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --pattern "*-202[45].csv" --table-prefix raw.data --schema raw
 ```
 
 ## Error Handling
@@ -275,7 +275,7 @@ pip install pandas pyodbc sqlalchemy
 
 Connection parameters can be overridden:
 ```bash
-python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" \
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" \
   --server localhost \
   --database $SQL_DATABASE \
   --username "$SQL_USER" \
@@ -304,11 +304,11 @@ Example workflow in dbt-pipeline-validator:
 ```python
 # Load test data for validation
 Task(skill="sql-executor", 
-     command="python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --pattern '*.csv' --table-prefix raw.source --schema raw")
+     command="python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --pattern '*.csv' --table-prefix raw.source --schema raw")
 
 # After dbt build and tests pass, clean up
 Task(skill="sql-executor",
-     command="python "$HOME/.claude/skills/sql-executor\scripts\load_data.py" --execute 'TRUNCATE TABLE raw.source_table'")
+     command="python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --execute 'TRUNCATE TABLE raw.source_table'")
 ```
 
 ## Best Practices

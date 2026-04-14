@@ -19,49 +19,49 @@ The skill is invoked through the Python script located in `scripts/run_dbt.py`.
 ### Run all models
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run
 ```
 
 ### Run specific model with downstream dependencies
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --select my_model+
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select my_model+
 ```
 
 ### Test all models
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" test
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test
 ```
 
 ### Test specific model
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" test --select my_model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select my_model
 ```
 
 ### Compile without executing
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" compile
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" compile
 ```
 
 ### Generate documentation
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" docs generate
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" docs generate
 ```
 
 ### Serve documentation locally
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" docs serve
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" docs serve
 ```
 
 ### Full refresh incremental models
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --full-refresh
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --full-refresh
 ```
 
 ## Additional Commands
@@ -69,49 +69,49 @@ python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --full-refresh
 ### Run snapshots (Type 2 SCD)
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" snapshot
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" snapshot
 ```
 
 ### Load seed files
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" seed
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" seed
 ```
 
 ### Check source freshness
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" source freshness
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" source freshness
 ```
 
 ### Install packages from packages.yml
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" deps
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" deps
 ```
 
 ### Debug connection and project setup
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" debug
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" debug
 ```
 
 ### Build (run + test in one command)
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" build --select my_model+
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" build --select my_model+
 ```
 
 ### List resources
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" list --select tag:daily
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" list --select tag:daily
 ```
 
 ### Clean artifacts
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" clean
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" clean
 ```
 
 ## Slim CI Pattern
@@ -120,8 +120,8 @@ Run only modified models and their downstream dependencies for efficient CI/CD:
 
 ```bash
 # Assumes state files exist in target/
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --select state:modified+
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" test --select state:modified+
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select state:modified+
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select state:modified+
 ```
 
 **Setup**:
@@ -141,19 +141,19 @@ python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" test --select state:
 ### Run staging models only
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --select stg_*
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select stg_*
 ```
 
 ### Run models and test them
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --select my_model && python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" test --select my_model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select my_model && python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select my_model
 ```
 
 ### Compile and show compiled SQL
 
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" compile --select my_model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" compile --select my_model
 # Check target/compiled/[project]/models/ for compiled SQL
 ```
 
@@ -170,43 +170,43 @@ The `--select` flag supports dbt's powerful selection syntax:
 
 ### By Tag
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --select tag:daily
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --select tag:pii
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select tag:daily
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select tag:pii
 ```
 
 ### By Path
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --select path:models/staging/salesforce
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select path:models/staging/salesforce
 ```
 
 ### By Resource Type
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" test --select test_type:generic
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" test --select test_type:singular
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select test_type:generic
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select test_type:singular
 ```
 
 ### Union and Intersection
 ```bash
 # Union (OR) - run both models and their children
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --select fct_sales+,dim_customer+
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select fct_sales+,dim_customer+
 
 # Intersection (AND) - models that match both criteria
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --select fct_sales+,tag:daily
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select fct_sales+,tag:daily
 ```
 
 ### Exclude
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --exclude tag:deprecated
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" test --exclude test_type:data
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --exclude tag:deprecated
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --exclude test_type:data
 ```
 
 ### N Levels of Dependencies
 ```bash
 # 2 levels of parents
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --select 2+fct_sales
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select 2+fct_sales
 
 # 1 level of children
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --select fct_sales+1
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select fct_sales+1
 ```
 
 ## Useful Flags
@@ -214,31 +214,31 @@ python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --select fct_sal
 ### Variables (--vars)
 Pass variables at runtime:
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --vars '{"start_date": "2024-01-01", "end_date": "2024-12-31"}'
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --vars '{"start_date": "2024-01-01", "end_date": "2024-12-31"}'
 ```
 
 ### Full Refresh (--full-refresh)
 Force full table rebuild for incremental models:
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --full-refresh --select fct_sales
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --full-refresh --select fct_sales
 ```
 
 ### Fail Fast (--fail-fast)
 Stop on first failure:
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" test --fail-fast
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --fail-fast
 ```
 
 ### Threads (--threads)
 Control parallelism:
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --threads 8
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --threads 8
 ```
 
 ### Target (--target)
 Run against specific target environment:
 ```bash
-python "$HOME/.claude/skills/dbt-runner\scripts\run_dbt.py" run --target prod
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --target prod
 ```
 
 ## Environment

@@ -85,22 +85,22 @@ The orchestrator uses this to populate Sections 2-3 of `1 - Documentation/pipeli
 
 **Profile a SQL Server table:**
 ```bash
-python "$HOME/.claude/skills/data-profiler/scripts/profile_data.py" --table raw_customers --verbose
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table raw_customers --verbose
 ```
 
 **Profile a CSV file:**
 ```bash
-python "$HOME/.claude/skills/data-profiler/scripts/profile_data.py" --file "2 - Source Files/customers.csv"
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file "2 - Source Files/customers.csv"
 ```
 
 **Profile multiple tables:**
 ```bash
-python "$HOME/.claude/skills/data-profiler/scripts/profile_data.py" --tables customers orders products
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --tables customers orders products
 ```
 
 **Quick profile (basic stats):**
 ```bash
-python "$HOME/.claude/skills/data-profiler/scripts/profile_data.py" --table large_table --quick
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table large_table --quick
 ```
 
 Profiles are saved to `1 - Documentation/data-profiles/` as JSON files.
@@ -129,7 +129,7 @@ Glob("models/staging/**/schema.yml")              # dbt source definitions
 
 If profiles don't exist for requested tables, run data-profiler:
 ```bash
-python "$HOME/.claude/skills/data-profiler/scripts/profile_data.py" --table <table_name> --verbose
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table <table_name> --verbose
 ```
 
 ### Step 3: Read and Synthesize

@@ -39,7 +39,7 @@ This skill provides automated data profiling with intelligent analysis to:
 
 The skill is invoked through the Python script located in the skill's folder.
 
-**Script Location**: `$HOME/.claude/skills/data-profiler/scripts/profile_data.py`
+**Script Location**: `${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py`
 
 **Important**: Always use the full path to the script, not a relative path. The script is in the skill folder, not the project folder.
 
@@ -48,7 +48,7 @@ The skill is invoked through the Python script located in the skill's folder.
 #### Profile a single table
 
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table customers
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table customers
 ```
 
 **Output**:
@@ -61,7 +61,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table cust
 #### Profile a schema-qualified table
 
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table raw.epraccur
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table raw.epraccur
 ```
 
 **Output**: Correctly splits `raw.epraccur` into schema `raw` and table `epraccur` for metadata queries. The full schema-qualified name is used for data queries.
@@ -69,7 +69,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table raw.
 #### Profile multiple tables
 
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --tables raw.customers raw.orders dbo.products
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --tables raw.customers raw.orders dbo.products
 ```
 
 **Output**: Profiles each table and generates individual reports
@@ -79,7 +79,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --tables raw
 #### Profile a single CSV file
 
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file "2 - Source Files/dft-road-casualty-statistics-casualty-2024.csv"
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file "2 - Source Files/dft-road-casualty-statistics-casualty-2024.csv"
 ```
 
 **Output**:
@@ -92,7 +92,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file "2 - 
 #### Profile multiple CSV files with glob pattern
 
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --files "2 - Source Files/dft-road-casualty-statistics-casualty-*.csv"
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --files "2 - Source Files/dft-road-casualty-statistics-casualty-*.csv"
 ```
 
 **Output**: Profiles all matching CSV files
@@ -100,7 +100,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --files "2 -
 #### Profile specific columns only
 
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file data.csv --columns customer_id order_date amount
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file data.csv --columns customer_id order_date amount
 ```
 
 **Output**: Profiles only specified columns
@@ -109,10 +109,10 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file data.
 
 ```bash
 # SQL Server table
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table large_table --sample 10000
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table large_table --sample 10000
 
 # CSV file
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file large_file.csv --sample 10000
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file large_file.csv --sample 10000
 ```
 
 **Output**: Profiles based on sample of 10,000 rows for faster analysis
@@ -120,7 +120,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file large
 ### Quick profile (basic stats only)
 
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file orders.csv --quick
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file orders.csv --quick
 ```
 
 **Output**: Fast profile with row count, column count, and basic statistics only
@@ -128,7 +128,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file order
 ### JSON output for automation
 
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file customers.csv --format json
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file customers.csv --format json
 ```
 
 **Output**: Structured JSON for integration with other tools
@@ -138,7 +138,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file custo
 ### Verbose logging
 
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file customers.csv --verbose
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file customers.csv --verbose
 ```
 
 **Output**: Detailed logging of profiling process
@@ -146,7 +146,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file custo
 ### Custom output directory
 
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file customers.csv --output-dir "path/to/custom/location"
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file customers.csv --output-dir "path/to/custom/location"
 ```
 
 **Default Behavior**:
@@ -367,7 +367,7 @@ The primary use case - dbt-staging-builder uses data-profiler to:
 **Workflow (CSV source)**:
 ```bash
 # dbt-staging-builder invokes data-profiler on CSV
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file "2 - Source Files/casualties-2024.csv"
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file "2 - Source Files/casualties-2024.csv"
 
 # Reviews inferred types and profile
 # Creates staging model with appropriate:
@@ -380,7 +380,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file "2 - 
 **Workflow (SQL table)**:
 ```bash
 # dbt-staging-builder invokes data-profiler on raw table
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table raw_customers
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table raw_customers
 
 # Reviews profile output
 # Creates staging model with appropriate:
@@ -437,7 +437,7 @@ profile_path = "1 - Documentation/data-profiles/profile_customers_20260113_14302
 ### Profile with custom confidence threshold
 
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table customers --pk-threshold 0.95
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table customers --pk-threshold 0.95
 ```
 
 **Default threshold**: 99% distinct + 1% nulls
@@ -446,7 +446,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table cust
 ### Profile only specific columns
 
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table customers --columns customer_id email status
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table customers --columns customer_id email status
 ```
 
 **Output**: Profiles only specified columns for faster analysis
@@ -455,10 +455,10 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table cust
 
 ```bash
 # Profile source table
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table raw_customers --output raw_profile.csv
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table raw_customers --output raw_profile.csv
 
 # Profile staging model after transformation
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table stg_erp__customers --output stg_profile.csv
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table stg_erp__customers --output stg_profile.csv
 
 # Compare the two CSV files
 ```
@@ -466,7 +466,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table stg_
 ### Generate dbt YAML scaffold
 
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table customers --generate-yaml
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table customers --generate-yaml
 ```
 
 **Output**: Generates ready-to-use dbt schema.yml with:
@@ -557,7 +557,7 @@ models:
 
 ```bash
 # Profile the table
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table raw_customers
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table raw_customers
 
 # Review output and identify:
 # - Primary key: customer_id
@@ -571,20 +571,20 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table raw_
 
 ```bash
 # Get list of tables
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --list-tables
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --list-tables
 
 # Profile each source table
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --tables customers orders products line_items
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --tables customers orders products line_items
 ```
 
 ### Data quality validation
 
 ```bash
 # Profile to establish baseline
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table orders --output baseline.csv
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table orders --output baseline.csv
 
 # After data cleanup
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table orders --output after_cleanup.csv
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table orders --output after_cleanup.csv
 
 # Compare null percentages and data quality metrics
 ```
@@ -692,25 +692,25 @@ data-profiler automates all of this in a single command.
 ### Connection Issues
 Use sql-server-reader test connection:
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --test-connection
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --test-connection
 ```
 
 ### Table Not Found
 Verify table exists:
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --list-tables
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --list-tables
 ```
 
 ### Slow Profiling
 Use sample for large tables:
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table large_table --sample 50000
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table large_table --sample 50000
 ```
 
 ### Memory Issues
 Profile columns individually:
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table huge_table --columns id name status
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table huge_table --columns id name status
 ```
 
 ### Unicode Encoding Issues (Windows)
@@ -723,23 +723,23 @@ UnicodeEncodeError: 'charmap' codec can't encode characters
 
 1. **Use JSON format** (Recommended for automation):
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file data.csv --format json
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file data.csv --format json
 ```
 
 2. **Set UTF-8 encoding environment variable**:
 ```bash
 # PowerShell
 $env:PYTHONIOENCODING="utf-8"
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file data.csv
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file data.csv
 
 # Command Prompt
 set PYTHONIOENCODING=utf-8
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file data.csv
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file data.csv
 ```
 
 3. **Redirect output to file**:
 ```bash
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --file data.csv > profile_output.txt
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file data.csv > profile_output.txt
 ```
 
 **Note**: JSON format is recommended for Claude Code agent workflows to avoid encoding issues entirely.
@@ -785,7 +785,7 @@ Profiles are automatically saved to `1 - Documentation/data-profiles/` with bene
 
 ```bash
 # Step 1: Profile source table
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table raw_customers --verbose
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table raw_customers --verbose
 
 # Review output
 # - PK: customer_id (100% distinct, 0% null)
@@ -803,7 +803,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table raw_
 
 ```bash
 # Profile all ERP source tables
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --tables \
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --tables \
   raw_customers \
   raw_orders \
   raw_products \
@@ -821,7 +821,7 @@ python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --tables \
 
 ```bash
 # Profile to identify data quality issues
-python "$HOME/.claude/skills/data-profiler\scripts\profile_data.py" --table orders --detailed
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table orders --detailed
 
 # Output shows:
 # - order_total has negative values (data quality issue)

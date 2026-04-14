@@ -23,7 +23,7 @@ This skill helps you:
 ### Generate Documentation
 
 ```bash
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" generate
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" generate
 ```
 
 Runs `dbt docs generate` to create:
@@ -36,7 +36,7 @@ Runs `dbt docs generate` to create:
 ### Serve Documentation Locally
 
 ```bash
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" serve
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" serve
 ```
 
 Starts a local web server to browse documentation interactively.
@@ -55,7 +55,7 @@ Starts a local web server to browse documentation interactively.
 ### Generate and Serve (One Command)
 
 ```bash
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" all
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" all
 ```
 
 Runs both `generate` and `serve` in sequence.
@@ -63,7 +63,7 @@ Runs both `generate` and `serve` in sequence.
 ### Export Static Site
 
 ```bash
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" export --output-dir ./docs-export
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" export --output-dir ./docs-export
 ```
 
 Exports a static HTML site that can be:
@@ -77,7 +77,7 @@ Exports a static HTML site that can be:
 ### Custom Port
 
 ```bash
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" serve --port 8081
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" serve --port 8081
 ```
 
 Start docs server on a different port (useful if 8080 is in use).
@@ -85,7 +85,7 @@ Start docs server on a different port (useful if 8080 is in use).
 ### Generate Only Manifest (Fast)
 
 ```bash
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" generate --no-catalog
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" generate --no-catalog
 ```
 
 Generates only manifest.json, skips catalog.json (database query).
@@ -214,7 +214,7 @@ Generate docs in CI/CD pipeline:
 ### Successful Generation
 
 ```
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" generate
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" generate
 
 Running: dbt docs generate
 15:23:45  Running with dbt=1.7.4
@@ -232,7 +232,7 @@ Files created:
   - target/catalog.json (145 KB)
   - target/index.html (89 KB)
 
-View docs: python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" serve
+View docs: python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" serve
 ```
 
 ### Catalog Generation Issues
@@ -257,7 +257,7 @@ To fix:
 ### Use Case 1: Developer Documentation Review
 ```bash
 # After creating new models
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" all
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" all
 
 # Browse locally
 # Verify lineage is correct
@@ -267,10 +267,10 @@ python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" all
 ### Use Case 2: Stakeholder Presentation
 ```bash
 # Generate clean docs
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" generate
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" generate
 
 # Export static site
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" export --output-dir ./stakeholder-docs
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" export --output-dir ./stakeholder-docs
 
 # Share folder with stakeholders
 # Or upload to web hosting
@@ -279,7 +279,7 @@ python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" export
 ### Use Case 3: PR Documentation Check
 ```bash
 # In PR workflow
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" generate
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" generate
 
 # Check if manifest.json generated successfully
 # Validates that all refs are correct
@@ -289,7 +289,7 @@ python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" genera
 ### Use Case 4: Onboarding New Team Members
 ```bash
 # Start docs server
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" serve
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" serve
 
 # New team member can:
 # - Browse all models and their purpose
@@ -315,7 +315,7 @@ Error: Port 8080 is already in use
 **Solution**:
 ```bash
 # Use different port
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" serve --port 8081
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" serve --port 8081
 ```
 
 ### Issue: Database Connection Failed
@@ -386,19 +386,19 @@ docs-export/
 
 ### Specify dbt Project Directory
 ```bash
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" generate --project-dir /path/to/project
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" generate --project-dir /path/to/project
 ```
 
 ### Specify Target Profile
 ```bash
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" generate --target prod
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" generate --target prod
 ```
 
 Uses `prod` target from profiles.yml instead of default.
 
 ### Generate with Warnings
 ```bash
-python "$HOME/.claude/skills/dbt-docs-generator\scripts\generate_docs.py" generate --warn-error
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" generate --warn-error
 ```
 
 Treats warnings as errors (stricter validation).

@@ -110,6 +110,69 @@ The marketplace name is **not** part of the namespace — only the plugin name (
 
 **Related open issue (not yet fixed):** During install and update of this plugin on a fresh machine, Claude Code did **not** surface the interactive prompt for `userConfig` fields. Hypotheses include the undocumented `title` / `type` fields in each userConfig entry, the "Leave empty to..." phrasing in descriptions, or a Claude Code version difference. Until the root cause is identified and fixed, users may need to set the config values manually in `settings.json` under `pluginConfigs.dbt-pipeline-toolkit.options` (and in the system keychain for sensitive values). This needs to be documented in the plugin README.
 
+### 2026-04-14 — Main-thread `--agent` delegation to plugin siblings empirically works (despite GitHub issues and "Not Planned" feature request)
+
+**Observation:** On a fresh install of this plugin, invoking `claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator "Build a pipeline"` **successfully delegates to sibling plugin-shipped subagents**. The orchestrator running as the main thread has the `Task`/`Agent` tool available and can spawn specialists via `subagent_type: "dbt-pipeline-toolkit:<subdir>:<name>"`.
+
+**Why this is surprising:** A research pass turned up multiple tracked issues on `anthropics/claude-code` that directly claim this should not work:
+- [#19077](https://github.com/anthropics/claude-code/issues/19077) (OPEN) — "Custom agent as main → No `Task()` tool"
+- [#23506](https://github.com/anthropics/claude-code/issues/23506) — "Custom agents (`--agent`) cannot spawn subagents … Task tool unavailable"
+- [#19276](https://github.com/anthropics/claude-code/issues/19276) — feature request to make plugin agents callable via `Task` was **closed "Not Planned"** on 2026-02-27
+- [#13605](https://github.com/anthropics/claude-code/issues/13605) — plugin subagents don't receive declared MCP tools
+- [#13627](https://github.com/anthropics/claude-code/issues/13627) — spawned custom agent body content is silently dropped
+
+The research concluded the delegation path was architecturally blocked. Empirical testing on a fresh install proved otherwise. Possible reasons: behavior was silently added after the issues were filed, the `~/.claude/plugins/*/agents/*.md` discovery path differs from the `.claude/agents/*.md` path the issues describe, or the 3-part namespaced invocation takes a different resolver than the bare-name invocation bug reports used. We don't know which.
+
+**Full research archive:** `_Research/plugin-subagent-delegation.md` — contains every issue link, direct quotes, working-alternative architectures (skill-orchestrator, `general-purpose` with injected prompts, slash-command coordinator), and a list of follow-up empirical tests still needed (Issue #13627's body-drop claim, Issue #13605's MCP-strip claim).
+
+**Implications for this plugin:**
+- The current orchestrator-as-main-thread architecture is the right design and ships as-is. No fallback rewrite needed right now.
+- **But it depends on an officially-unsupported path.** A future Claude Code release could re-break delegation without warning. Treat it like a beta-level dependency.
+- Any CI smoke test for this plugin **must include** a minimal end-to-end run on a clean install, verifying the orchestrator actually spawns at least one specialist. A unit test is not enough; the bug this catches is invisible at the file level.
+- A documented fallback architecture is worth keeping in `_Research/plugin-subagent-delegation.md` so that if delegation regresses, the conversion to a skill-orchestrator pattern is pre-planned, not panic-designed.
+
+**How to avoid regression:**
+- Keep `_Research/plugin-subagent-delegation.md` updated with any new issues or empirical observations about plugin delegation behavior
+- Before every plugin release, run a smoke test on a fresh install to confirm the orchestrator still delegates
+- If any future Claude Code release breaks delegation, fall back to the skill-orchestrator path documented in the research file — don't try to fix the broken delegation path itself
+
+**Still needs empirical testing:**
+1. Does Issue #13627's body-content-drop claim apply to our specialists? Test by asking a spawned specialist to identify its role — if it answers generically instead of from its own agent.md body, the bug is still in effect
+2. Does Issue #13605's MCP-tool-strip claim apply to our specialists? Test by having a specialist try to call an `sql-server-mcp:*` tool and verify it resolves
+3. Does the MCP server's `userConfig` prompt actually fire on a clean install (Finding 5 Problem B from `plugin_learnings.md`)?
+
+### 2026-04-14 — Plugin-internal script paths must use `${CLAUDE_PLUGIN_ROOT}/skills/<name>/scripts/<file>.py` with forward slashes
+
+**Change:** Every agent body and SKILL.md usage example in the plugin had its Python script invocation path rewritten from `$HOME/.claude/skills/<name>/scripts/<file>.py` to `${CLAUDE_PLUGIN_ROOT}/skills/<name>/scripts/<file>.py`. Applied in two mechanical passes across all 11 plugin files:
+
+1. Prefix replacement: `$HOME/.claude/skills/` → `${CLAUDE_PLUGIN_ROOT}/skills/` (183 occurrences)
+2. Backslash normalization: `\scripts\` → `/scripts/` (162 occurrences across 8 SKILL.md files)
+
+Final count: **187 references** to `${CLAUDE_PLUGIN_ROOT}/skills/...` across 11 files. Zero remaining instances of the old `$HOME/.claude/skills/` pattern or Windows-cmd backslash separators in plugin source.
+
+Files modified:
+- `agents/data-explorer/agent.md`
+- `agents/dbt-architecture-setup/agent.md`
+- `agents/dbt-staging-builder/agent.md`
+- `agents/dbt-pipeline-orchestrator/agent.md`
+- `skills/data-profiler/SKILL.md`
+- `skills/sql-server-reader/SKILL.md`
+- `skills/sql-executor/SKILL.md`
+- `skills/dbt-runner/SKILL.md`
+- `skills/dbt-docs-generator/SKILL.md`
+- `skills/dbt-project-initializer/SKILL.md`
+- `skills/dbt-test-coverage-analyzer/SKILL.md`
+
+**Reason:** On a fresh marketplace install, Claude Code does **not** put plugin skills at `~/.claude/skills/<name>/`. That location is reserved for standalone, non-plugin skills. Plugin contents are copied to the plugin cache at `~/.claude/plugins/cache/<id>/skills/<name>/`, and the official way to reference them from agent/skill markdown is the variable `${CLAUDE_PLUGIN_ROOT}`, which Claude Code substitutes inline at load time. On the user's dev machine the old pattern appeared to work because the standalone-skill copy was still present from earlier development, but on a fresh install every script invocation silently failed with "file not found." In background-spawned subagents (like `data-explorer` at Stage 2, or any builder at Stages 7–9), the failure was invisible to the orchestrator — the agent completed without error and returned an empty result, and the orchestrator stalled with no useful diagnostic. This was the root cause of the user's "data-profiler was called but no profile document was created" symptom, but it equally affected every other SQL-connected specialist and would have broken the entire pipeline at Stage 6 even if the profiler had happened to work.
+
+**How to avoid regression:**
+- **Any new Python script invocation** added to this plugin — in an agent body, a SKILL.md usage section, a hook command, or a code block — **must** use `${CLAUDE_PLUGIN_ROOT}/skills/<name>/scripts/<file>.py` with forward slashes.
+- **Never use `$HOME/.claude/...` paths** in plugin markdown. That's for standalone-skill dev workflows only, not plugin content.
+- **Never use Windows-cmd backslash separators** (`\scripts\`) in path segments. Git Bash interprets backslashes as escape characters inside double-quoted strings, so `"\scripts\profile_data.py"` becomes corrupted on Unix-style shells even though Windows Python accepts it.
+- Consider a pre-commit or CI check that greps for `$HOME/.claude/skills/` in any `*.md` file under `agents/` or `skills/` and fails if found. This is a mechanical correctness check that catches this exact regression for free.
+
+**Caveat — needs empirical verification on next fresh install:** We're >90% confident `${CLAUDE_PLUGIN_ROOT}` is substituted inline in agent and skill markdown body content (the plugins-reference doc says so, and `plugin.json` already uses it successfully for the MCP server path). The remaining risk is that substitution might only happen in `plugin.json` / hook / MCP configs and not in markdown body. If that turns out to be the case, the next fresh-install run will still fail to find the scripts — the failure mode would be Bash seeing a literal `${CLAUDE_PLUGIN_ROOT}` with no env var set, and the file not resolving. Fallback plan: add a `SessionStart` hook that exports `PLUGIN_ROOT=$CLAUDE_PLUGIN_ROOT` to the shell environment, then change the markdown references from `${CLAUDE_PLUGIN_ROOT}` to `$PLUGIN_ROOT` so the bash subprocess can resolve it. Worth testing the current fix first before preemptively adding the hook.
+
 ### General rule — test on a fresh install, not in dev
 
 Every finding above was invisible during local development (`--plugin-dir` or direct `.claude/agents/` drop) and only surfaced after installing from the marketplace on a second machine. Before shipping any plugin change that touches agent definitions, orchestration, or permission flow:

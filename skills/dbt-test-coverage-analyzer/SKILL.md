@@ -23,7 +23,7 @@ This skill scans your dbt project to:
 ### Basic Coverage Report
 
 ```bash
-python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py"
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py"
 ```
 
 Outputs:
@@ -35,7 +35,7 @@ Outputs:
 ### Detailed Report with Recommendations
 
 ```bash
-python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py" --detailed
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --detailed
 ```
 
 Includes:
@@ -47,7 +47,7 @@ Includes:
 ### JSON Output for Automation
 
 ```bash
-python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py" --format json
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --format json
 ```
 
 Returns structured JSON for CI/CD integration or further processing.
@@ -56,10 +56,10 @@ Returns structured JSON for CI/CD integration or further processing.
 
 ```bash
 # Analyze only staging models
-python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py" --layer staging
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --layer staging
 
 # Analyze only marts (facts + dimensions)
-python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py" --layer marts
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --layer marts
 ```
 
 ## Coverage Targets
@@ -151,7 +151,7 @@ Checks if models have:
 ### Pre-commit Hook
 ```bash
 # .git/hooks/pre-commit
-python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py" --format json > coverage.json
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --format json > coverage.json
 COVERAGE=$(jq -r '.overall_percentage' coverage.json)
 
 if (( $(echo "$COVERAGE < 80" | bc -l) )); then
@@ -164,8 +164,8 @@ fi
 ```yaml
 - name: Check dbt Test Coverage
   run: |
-    python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py" --detailed
-    python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py" --format json > coverage.json
+    python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --detailed
+    python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --format json > coverage.json
 
 - name: Fail if below target
   run: |
@@ -211,7 +211,7 @@ fi
 
 ### Markdown Report
 ```bash
-python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py" --format markdown > coverage-report.md
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --format markdown > coverage-report.md
 ```
 
 Generates a markdown file suitable for:
@@ -273,12 +273,12 @@ Generates a markdown file suitable for:
 ### Example 1: Check Coverage Before PR
 ```bash
 # In PR workflow
-python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py" --detailed
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --detailed
 
 # Output shows gaps
 # Add missing tests
 # Re-check
-python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py"
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py"
 
 # Coverage now 85% ✓
 # Proceed with PR
@@ -287,12 +287,12 @@ python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage
 ### Example 2: Focus on Marts Layer
 ```bash
 # Check only marts coverage
-python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py" --layer marts
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --layer marts
 
 # Shows facts at 80%, dims at 60%
 # Focus on dimension tests
 # Re-check marts
-python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py" --layer marts
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --layer marts
 
 # All marts now at 90%+ ✓
 ```
@@ -300,7 +300,7 @@ python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage
 ### Example 3: CI/CD Integration
 ```bash
 # Run in CI pipeline
-python "$HOME/.claude/skills/dbt-test-coverage-analyzer\scripts\analyze_coverage.py" --format json > coverage.json
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --format json > coverage.json
 
 # Parse result
 jq -r '.recommendations[]' coverage.json

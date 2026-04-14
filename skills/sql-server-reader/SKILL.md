@@ -34,7 +34,7 @@ The skill is invoked through the Python script located in `scripts/query_sql_ser
 ### List all tables in the database
 
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --list-tables
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --list-tables
 ```
 
 **Output**: Displays table names and saves list to `7 - Data Exports/table_list.csv`
@@ -42,12 +42,12 @@ python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --li
 ### Get schema for a specific table
 
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --schema TABLE_NAME
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --schema TABLE_NAME
 ```
 
 **Example**:
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --schema customers
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --schema customers
 ```
 
 **Output**: 
@@ -57,7 +57,7 @@ python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --sc
 ### Execute a SELECT query
 
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT * FROM customers WHERE region = 'North'"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT * FROM customers WHERE region = 'North'"
 ```
 
 **Output**: 
@@ -67,7 +67,7 @@ python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --qu
 ### Execute query from file
 
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query-file path/to/query.sql
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query-file path/to/query.sql
 ```
 
 **Output**: 
@@ -76,12 +76,12 @@ python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --qu
 ### Export specific table to CSV
 
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --export TABLE_NAME
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --export TABLE_NAME
 ```
 
 **Example**:
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --export customers
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --export customers
 ```
 
 **Output**: Full table export to `7 - Data Exports/TABLE_NAME_TIMESTAMP.csv`
@@ -89,7 +89,7 @@ python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --ex
 ### Limit result rows
 
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT * FROM orders" --limit 100
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT * FROM orders" --limit 100
 ```
 
 **Output**: Returns only first 100 rows
@@ -100,46 +100,46 @@ python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --qu
 
 ```bash
 # See what tables exist
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --list-tables
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --list-tables
 
 # Check structure of specific table
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --schema orders
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --schema orders
 
 # Sample first 10 rows
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT TOP 10 * FROM orders"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT TOP 10 * FROM orders"
 ```
 
 ### Data validation during dbt development
 
 ```bash
 # Check if staging model data looks correct
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --export stg_erp__customers --limit 100
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --export stg_erp__customers --limit 100
 
 # Validate business logic
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT customer_id, COUNT(*) as order_count FROM orders GROUP BY customer_id"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT customer_id, COUNT(*) as order_count FROM orders GROUP BY customer_id"
 ```
 
 ### Debugging data issues
 
 ```bash
 # Find null values
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT * FROM products WHERE price IS NULL"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT * FROM products WHERE price IS NULL"
 
 # Check data ranges
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT MIN(order_date), MAX(order_date) FROM orders"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT MIN(order_date), MAX(order_date) FROM orders"
 
 # Find duplicates
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT product_id, COUNT(*) FROM products GROUP BY product_id HAVING COUNT(*) > 1"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT product_id, COUNT(*) FROM products GROUP BY product_id HAVING COUNT(*) > 1"
 ```
 
 ### Compare source vs transformed data
 
 ```bash
 # Export raw source table
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --export raw_customers --limit 1000
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --export raw_customers --limit 1000
 
 # Export staging transformation
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --export stg_erp__customers --limit 1000
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --export stg_erp__customers --limit 1000
 
 # Compare CSV files in 7 - Data Exports/
 ```
@@ -202,20 +202,20 @@ Only SELECT statements are allowed.
 ### Custom output filename
 
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT * FROM customers" --output customer_snapshot.csv
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT * FROM customers" --output customer_snapshot.csv
 ```
 
 ### Query timeout configuration
 
 ```bash
 # Set 60 second timeout for long queries
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT * FROM large_table" --timeout 60
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT * FROM large_table" --timeout 60
 ```
 
 ### JSON output instead of CSV
 
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT * FROM products" --format json
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT * FROM products" --format json
 ```
 
 **Output**: Saves as `query_results_TIMESTAMP.json`
@@ -223,7 +223,7 @@ python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --qu
 ### Verbose logging
 
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --list-tables --verbose
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --list-tables --verbose
 ```
 
 **Output**: Shows connection details, query execution time, row counts
@@ -234,30 +234,30 @@ python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --li
 Use to explore data landscape during discovery:
 ```bash
 # What tables exist for customer data?
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --list-tables
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --list-tables
 
 # What does customer table structure look like?
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --schema customers
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --schema customers
 ```
 
 ### dbt-developer Agent
 Use to validate transformations:
 ```bash
 # Check staging model output
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --export stg_erp__customers --limit 100
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --export stg_erp__customers --limit 100
 
 # Validate business logic
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT COUNT(DISTINCT customer_id) FROM stg_erp__customers"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT COUNT(DISTINCT customer_id) FROM stg_erp__customers"
 ```
 
 ### dbt-test-writer Agent
 Use to design test expectations:
 ```bash
 # Check for nulls that should trigger test failure
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT COUNT(*) FROM customers WHERE email IS NULL"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT COUNT(*) FROM customers WHERE email IS NULL"
 
 # Find data anomalies
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT * FROM orders WHERE order_total < 0"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT * FROM orders WHERE order_total < 0"
 ```
 
 ## Requirements
@@ -295,7 +295,7 @@ SQL_SERVER_PORT=1433
 ### Script Arguments
 All connection details can be passed as arguments:
 ```bash
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" \
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" \
   --server localhost \
   --database $SQL_DATABASE \
   --user "$SQL_USER" \
@@ -308,7 +308,7 @@ python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" \
 ### Connection Refused
 ```bash
 # Test connection
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --test-connection
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --test-connection
 
 # Check SQL Server is running
 # Services → SQL Server (MSSQLSERVER) → Status: Running
@@ -322,10 +322,10 @@ python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --te
 ### Table Not Found
 ```bash
 # List all available tables
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --list-tables
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --list-tables
 
 # Check database name
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT DB_NAME()"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT DB_NAME()"
 ```
 
 ### Driver Not Found
@@ -334,7 +334,7 @@ python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --qu
 # Download from: https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server
 
 # Or use ODBC Driver 11 if 17 not available
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --driver "ODBC Driver 11 for SQL Server"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --driver "ODBC Driver 11 for SQL Server"
 ```
 
 ## Best Practices
@@ -369,16 +369,16 @@ python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --dr
 
 ```bash
 # 1. List all tables
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --list-tables
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --list-tables
 
 # 2. Inspect customer table structure
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --schema customers
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --schema customers
 
 # 3. Export sample data
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --export customers --limit 1000 --output customer_sample.csv
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --export customers --limit 1000 --output customer_sample.csv
 
 # 4. Check data quality
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "
 SELECT 
   COUNT(*) as total_rows,
   COUNT(DISTINCT customer_id) as unique_customers,
@@ -389,30 +389,30 @@ FROM customers
 "
 
 # 5. Find specific issues
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT * FROM customers WHERE email IS NULL OR email = ''" --output customers_missing_email.csv
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT * FROM customers WHERE email IS NULL OR email = ''" --output customers_missing_email.csv
 ```
 
 ### Quick reference guide
 
 ```bash
 # List tables
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --list-tables
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --list-tables
 
 # Get schema
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --schema TABLE_NAME
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --schema TABLE_NAME
 
 # Sample data
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "SELECT TOP 10 * FROM TABLE_NAME"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT TOP 10 * FROM TABLE_NAME"
 
 # Export full table
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --export TABLE_NAME
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --export TABLE_NAME
 
 # Custom query
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query "YOUR_SELECT_QUERY"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "YOUR_SELECT_QUERY"
 
 # Query from file
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --query-file path/to/query.sql
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query-file path/to/query.sql
 
 # Test connection
-python "$HOME/.claude/skills/sql-server-reader\scripts\query_sql_server.py" --test-connection
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --test-connection
 ```

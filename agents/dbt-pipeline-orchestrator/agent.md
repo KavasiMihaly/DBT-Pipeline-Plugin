@@ -307,7 +307,7 @@ The count must match the number of sources discovered in Stage 0. If it doesn't,
 **Step 2 — Run the load script.** Do NOT load data manually or write your own SQL. Always use the sql-executor skill:
 
 ```bash
-python "$HOME/.claude/skills/sql-executor/scripts/load_data.py" --pattern "*.csv" --schema raw
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --pattern "*.csv" --schema raw
 ```
 
 **Step 3 — Verify row counts** match data-explorer profiles from Stage 2.
@@ -535,19 +535,19 @@ To completely wipe a pipeline build and return the project to its original state
 
 ```bash
 # Total reset — database tables + all project folders + venv + git
-python "$HOME/.claude/skills/dbt-project-initializer/scripts/reset_project.py" --database {database_name} --schemas raw,dbo
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --database {database_name} --schemas raw,dbo
 
 # Preview what would be dropped/deleted without executing
-python "$HOME/.claude/skills/dbt-project-initializer/scripts/reset_project.py" --dry-run
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --dry-run
 
 # Only reset database, keep project files
-python "$HOME/.claude/skills/dbt-project-initializer/scripts/reset_project.py" --db-only
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --db-only
 
 # Only reset files, keep database tables
-python "$HOME/.claude/skills/dbt-project-initializer/scripts/reset_project.py" --files-only
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --files-only
 
 # Keep raw source tables, only drop dbt-created models (dbo schema)
-python "$HOME/.claude/skills/dbt-project-initializer/scripts/reset_project.py" --keep-raw
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --keep-raw
 ```
 
 **What the total reset does:**
