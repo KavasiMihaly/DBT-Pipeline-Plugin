@@ -113,25 +113,29 @@ This is the single source of truth. **Only you write to it** (except business-an
 
 ### Stage 0: Source Discovery
 
-**Scan cwd recursively for CSV files:**
+**Scan cwd recursively for CSV files.** Issue this command as a single atomic Bash call:
 
 ```bash
-find . -name "*.csv" -type f 2>/dev/null
+find . -name "*.csv" -type f
 ```
 
-Decision logic:
+Read the output and apply this decision logic:
 - Zero CSVs → FAIL with "No CSV files found in {cwd}. Place source CSVs in the repo before invoking orchestrator."
 - CSVs in one location → use it as `source_files_origin`
 - CSVs in multiple locations → pick the folder with most CSVs; log the choice in Section 12
 - CSVs in cwd root → `source_files_origin = cwd`
 
-Also discover existing scaffolding:
+**Also discover existing scaffolding.** Issue this as a separate atomic call:
+
 ```bash
-ls dbt_project.yml 2>/dev/null && echo "INCREMENTAL_MODE" || echo "FRESH_BUILD"
+ls dbt_project.yml
 ```
 
-If `dbt_project.yml` already exists → **incremental mode**: skip architecture-setup, use existing schemas, add only new models.
-If absent → **fresh build**.
+Read the exit code:
+- Exit 0 (file exists) → **incremental mode**: skip architecture-setup, use existing schemas, add only new models.
+- Non-zero exit (file missing) → **fresh build**.
+
+**Atomic commands only.** Do NOT combine these checks into a compound `&&`/`||` expression. Every Bash tool call in this pipeline must be a single atomic operation — no `&&`, `||`, `;`, `|`, subshells `(...)`, command substitution `$(...)`, backticks, or redirects like `2>/dev/null`. If you need conditional or sequential logic, issue multiple Bash tool calls and read each command's output in LLM text before deciding the next step. This is required because compound commands break the plugin's PreToolUse allowlist hook and silently stall background subagents — the permission layer evaluates rules per-subcommand and compound expressions fall through to interactive prompts that background workers cannot answer.
 
 ### Stage 1: Discovery Q&A (USER TOUCH POINT 1)
 
@@ -154,9 +158,9 @@ Spawn `dbt-pipeline-toolkit:data-explorer:data-explorer` in **background**:
 ```
 Task(
   subagent_type: "dbt-pipeline-toolkit:data-explorer:data-explorer",
-  prompt: "Profile all CSV files in {source_files_origin}. Return the pipeline orchestration JSON envelope with profiled_tables, source_inventory, relationship_map, and quality_issues.",
+  prompt: "Profile every CSV file in {source_files_origin} by explicitly running the data-profiler script for each file: `python \"${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py\" --file \"<csv-path>\" --format json`. The script writes JSON profile files to `1 - Documentation/data-profiles/profile_<table>_<timestamp>.json`. This path is auto-approved by the plugin's PreToolUse hook, so Bash calls to this script work in background mode. After all CSVs are profiled, return the pipeline orchestration JSON envelope with profiled_tables, source_inventory, relationship_map, and quality_issues.",
   run_in_background: true,
-  mode: "acceptEdits"   // required: background agents cannot prompt for permissions
+  mode: "acceptEdits"   // file writes enabled; Bash for plugin scripts is auto-approved by the PreToolUse hook in plugin.json
 )
 ```
 
@@ -274,13 +278,39 @@ Task(
 
 Wait for completion. Verify folders created. Write Section 4 of pipeline-design.md with architecture decisions.
 
-**MANDATORY: Initialize git repository.** Dimension and fact builders use `isolation: worktree` for parallel execution, which requires a git repo. This is a hard gate — do NOT proceed to Stage 6 until git is confirmed:
+**MANDATORY: Initialize git repository.** Dimension and fact builders use `isolation: worktree` for parallel execution, which requires a git repo. This is a hard gate — do NOT proceed to Stage 6 until git is confirmed.
+
+Issue each of the following as a **separate atomic Bash call**, reading each command's output before deciding the next. Do NOT chain them with `&&`/`||` or subshells.
+
+**Step 1 — Check whether a git repo already exists:**
 
 ```bash
-git rev-parse --git-dir 2>/dev/null || (git init && git add -A && git commit -m "Initial scaffold")
+git rev-parse --git-dir
 ```
 
-Verify git is working:
+- Exit 0 → repo already exists. Skip to Step 5 (`git status`) to verify it's usable.
+- Non-zero exit → no repo yet. Continue to Step 2.
+
+**Step 2 — Initialize a new repo:**
+
+```bash
+git init
+```
+
+**Step 3 — Stage all files from the initial scaffold:**
+
+```bash
+git add -A
+```
+
+**Step 4 — Commit the initial scaffold:**
+
+```bash
+git commit -m "Initial scaffold"
+```
+
+**Step 5 — Verify git is working:**
+
 ```bash
 git status
 ```
@@ -297,12 +327,15 @@ mkdir -p "2 - Source Files"
 cp {source_files_origin}/*.csv "2 - Source Files/"
 ```
 
-Verify the files landed:
+Verify the files landed by issuing an atomic `find` call and counting the output lines in LLM text:
+
 ```bash
-ls "2 - Source Files/"*.csv | wc -l
+find "2 - Source Files" -name "*.csv" -type f
 ```
 
-The count must match the number of sources discovered in Stage 0. If it doesn't, STOP and investigate before proceeding.
+Count the number of lines in the output. That count must match the number of sources discovered in Stage 0. If it doesn't, STOP and investigate before proceeding.
+
+Do NOT pipe `ls` into `wc -l` or any other command. Compound shell expressions are forbidden in this pipeline. Atomic commands only — issue `find` as one call, then count the output lines in your own reasoning before proceeding.
 
 **Step 2 — Run the load script.** Do NOT load data manually or write your own SQL. Always use the sql-executor skill:
 
@@ -325,9 +358,9 @@ Spawn `dbt-pipeline-toolkit:dbt-staging-builder:dbt-staging-builder` in **backgr
 ```
 Task(
   subagent_type: "dbt-pipeline-toolkit:dbt-staging-builder:dbt-staging-builder",
-  prompt: "Create staging model for raw.{source_table}. Source: {source_name}. Use profile at 1 - Documentation/data-profiles/profile_{table}_*.json. Read pipeline-design.md for context.",
+  prompt: "Create staging model for raw.{source_table}. Source: {source_name}. Use profile at 1 - Documentation/data-profiles/profile_{table}_*.json. Read pipeline-design.md for context. To validate the model after writing it, run: `python \"${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py\" parse` and `python \"${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py\" run --select stg_{source}__{entity}`. These Bash calls are auto-approved by the plugin's PreToolUse hook.",
   run_in_background: true,
-  mode: "acceptEdits"   // required: background agents cannot prompt for permissions
+  mode: "acceptEdits"   // file writes enabled; Bash for plugin scripts is auto-approved by the PreToolUse hook in plugin.json
 )
 ```
 
@@ -345,9 +378,9 @@ For each dim in Section 6: spawn `dbt-pipeline-toolkit:dbt-dimension-builder:dbt
 ```
 Task(
   subagent_type: "dbt-pipeline-toolkit:dbt-dimension-builder:dbt-dimension-builder",
-  prompt: "Create {dim_name} from {source_staging}. Natural key: {nk}. SCD Type: {type}. Attributes: {list}. Read pipeline-design.md Sections 1-5 first.",
+  prompt: "Create {dim_name} from {source_staging}. Natural key: {nk}. SCD Type: {type}. Attributes: {list}. Read pipeline-design.md Sections 1-5 first. After writing the model, run `python \"${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py\" run --select {dim_name}` to build it. These Bash calls are auto-approved by the plugin's PreToolUse hook.",
   run_in_background: true,
-  mode: "acceptEdits"   // required: background agents cannot prompt for permissions
+  mode: "acceptEdits"   // file writes enabled; Bash for plugin scripts is auto-approved by the PreToolUse hook in plugin.json
 )
 ```
 
@@ -369,9 +402,9 @@ For each fact in Section 7: spawn `dbt-pipeline-toolkit:dbt-fact-builder:dbt-fac
 ```
 Task(
   subagent_type: "dbt-pipeline-toolkit:dbt-fact-builder:dbt-fact-builder",
-  prompt: "Create {fact_name} from {source_staging}. Grain: {grain}. FKs: {list}. Measures: {list}. Incremental: {strategy}. Read pipeline-design.md Sections 1-6 first.",
+  prompt: "Create {fact_name} from {source_staging}. Grain: {grain}. FKs: {list}. Measures: {list}. Incremental: {strategy}. Read pipeline-design.md Sections 1-6 first. After writing the model, run `python \"${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py\" run --select {fact_name}` to build it. These Bash calls are auto-approved by the plugin's PreToolUse hook.",
   run_in_background: true,
-  mode: "acceptEdits"   // required: background agents cannot prompt for permissions
+  mode: "acceptEdits"   // file writes enabled; Bash for plugin scripts is auto-approved by the PreToolUse hook in plugin.json
 )
 ```
 
@@ -389,9 +422,9 @@ Spawn `dbt-pipeline-toolkit:dbt-test-writer:dbt-test-writer` in **background**:
 ```
 Task(
   subagent_type: "dbt-pipeline-toolkit:dbt-test-writer:dbt-test-writer",
-  prompt: "Add tests for all models in 3 - Data Pipeline/models/. Target 80% coverage. Read pipeline-design.md Sections 1, 5-8. Write Section 9 when done.",
+  prompt: "Add tests for all models in 3 - Data Pipeline/models/. Target 80% coverage. Read pipeline-design.md Sections 1, 5-8. After writing tests, verify coverage by running `python \"${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py\" --format json --target 0`. The `--target 0` flag makes the script always exit 0 so you can read the JSON output without interpreting a non-zero exit as a tool failure — it's a reporting-only call. Parse the returned JSON, compare `overall_percentage` against the 80% goal yourself, and iterate: add more tests and re-run until coverage >= 80%. Then run `python \"${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py\" test` to execute the new tests. Write Section 9 when done. These Bash calls are auto-approved by the plugin's PreToolUse hook.",
   run_in_background: true,
-  mode: "acceptEdits"   // required: background agents cannot prompt for permissions
+  mode: "acceptEdits"   // file writes enabled; Bash for plugin scripts is auto-approved by the PreToolUse hook in plugin.json
 )
 ```
 
@@ -404,9 +437,9 @@ Spawn `dbt-pipeline-toolkit:dbt-pipeline-validator:dbt-pipeline-validator` in **
 ```
 Task(
   subagent_type: "dbt-pipeline-toolkit:dbt-pipeline-validator:dbt-pipeline-validator",
-  prompt: "Validate the complete pipeline end-to-end. Execute dbt build --full-refresh, verify all tests pass. Read all sections of pipeline-design.md. Write Section 10 when done.",
+  prompt: "Validate the complete pipeline end-to-end by running `python \"${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py\" build --full-refresh` and verify all tests pass. Also run `python \"${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py\" --format json --target 80` to gather the final coverage report. This call will exit 1 if coverage is below 80%, but Claude Code still captures the stdout — parse the JSON regardless of the exit code and record the coverage number in Section 10 of pipeline-design.md. If the exit code is 1, treat it as a validation failure signal and mark the pipeline as 'Build complete, coverage below target' rather than 'Validated'. Read all sections of pipeline-design.md. Write Section 10 when done. These Bash calls are auto-approved by the plugin's PreToolUse hook.",
   run_in_background: true,
-  mode: "acceptEdits"   // required: background agents cannot prompt for permissions
+  mode: "acceptEdits"   // file writes enabled; Bash for plugin scripts is auto-approved by the PreToolUse hook in plugin.json
 )
 ```
 

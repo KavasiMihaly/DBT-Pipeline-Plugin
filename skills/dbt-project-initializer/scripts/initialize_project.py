@@ -704,7 +704,7 @@ dbt deps
 1. Virtual environment created at `.venv/`
 2. All dependencies installed
 3. Configure `3 - Data Pipeline/profiles.yml` for dbt connection
-4. Test dbt: `cd "3 - Data Pipeline" && dbt debug`
+4. Test dbt: change into `3 - Data Pipeline/` and run `dbt debug` as separate atomic commands
 5. Install dbt packages: `dbt deps`
 6. Place source CSV files in `2 - Source Files/`
 7. Start building with personal agents!
@@ -1150,7 +1150,7 @@ def main():
     print("Next steps:")
     print("  1. cd to your project directory")
     print("  2. Activate virtual environment: .\\.venv\\Scripts\\Activate.ps1")
-    print("  3. Test dbt connection: cd '3 - Data Pipeline' && dbt debug")
+    print("  3. Test dbt connection: change into '3 - Data Pipeline/' and run 'dbt debug'")
     print("  4. Place source CSV files in '2 - Source Files/'")
     print("  5. Start building with personal agents!")
     print()

@@ -8,7 +8,37 @@
 
 ## Overview
 
-This project uses the dbt analytics engineering agents and skills for building data pipelines.
+This project uses the **`dbt-pipeline-toolkit`** Claude Code plugin for automated dbt pipeline construction. The plugin ships 9 specialized agents (orchestrator + 8 specialists) and 8 skills that collectively handle source profiling, project scaffolding, staging model generation, dimension/fact modeling, test writing, and end-to-end validation. It was installed from the `OneDayBI-Marketplace` marketplace. If you need to re-install or update, run `/plugin update dbt-pipeline-toolkit@OneDayBI-Marketplace` in Claude Code.
+
+Plugin-shipped skills are visible in the `/skills` menu under the `dbt-pipeline-toolkit:` namespace (e.g., `dbt-pipeline-toolkit:data-profiler`, `dbt-pipeline-toolkit:dbt-runner`). Plugin-shipped agents are visible in `/agents` under a 3-part namespace (e.g., `dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator`). Skills and agents marked "locked by plugin" are managed by the plugin lifecycle — they live in the plugin cache and cannot be edited in place.
+
+Plugin-internal script paths use the `${CLAUDE_PLUGIN_ROOT}` environment variable, which Claude Code substitutes with the plugin's absolute cache path at load time. You'll see this in agent and skill content as `python "${CLAUDE_PLUGIN_ROOT}/skills/<skill-name>/scripts/<file>.py"`.
+
+---
+
+## Bash commands must be atomic — no compound shell expressions
+
+**Every Bash command run in this project must be a single atomic operation.** This applies both to Claude's direct tool calls and to any Bash commands written into generated scripts, documentation, or agent prompts.
+
+**Forbidden operators in Bash commands:**
+- `&&` (AND), `||` (OR), `;` (sequence)
+- `|` (pipe), `|&` (stderr pipe)
+- Background `&`
+- Subshells `(...)`, command substitution `$(...)` or backticks
+- Heredocs
+- Non-essential redirects like `2>/dev/null`, `>/dev/null` — Claude Code's Bash tool handles exit codes and stderr natively
+
+**Only exception:** operators fully inside a quoted string argument where the shell does not interpret them — e.g., `python foo.py --sql "SELECT a || b FROM t"` where `||` is SQL syntax.
+
+**How to rewrite compound commands:**
+- "run A then B" → two separate Bash tool calls
+- "run A, if fails run B" → issue A, read exit code, conditionally issue B
+- "pipe A to B" → issue A, read the output, issue B with extracted arguments (or write a Python script that does both and call it atomically)
+- "many related commands" → write them into a Python script and call the script as one atomic invocation
+
+**Why:** The `dbt-pipeline-toolkit` plugin ships a PreToolUse hook that auto-approves plugin-internal Bash commands for background subagents, but the hook matches **per atomic command**. Compound shell expressions either fall through to interactive permission prompts (which background subagents cannot answer, causing silent stalls) or bypass the narrow allowlist (a security risk). Atomic commands are also individually auditable in the transcript and produce localized error messages when something fails.
+
+This rule is enforced across every file in this project — agent prompts, skill examples, generated scripts, and CI/CD workflows. If you find a compound shell expression anywhere in this repo, refactor it to atomic form before committing.
 
 ---
 
@@ -21,7 +51,7 @@ This project uses the dbt analytics engineering agents and skills for building d
 For building a complete pipeline from source files, the user should invoke the orchestrator as the main agent:
 
 ```bash
-claude --agent dbt-pipeline-orchestrator "Build a pipeline"
+claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator "Build a pipeline"
 ```
 
 The orchestrator runs the full workflow autonomously (business-analyst Q&A + design approval are the only user gates). It coordinates all specialists and maintains a single-source-of-truth `1 - Documentation/pipeline-design.md` document.
@@ -98,7 +128,7 @@ Do NOT combine multiple models into a shared `schema.yml` — that breaks parall
 ### dbt-pipeline-orchestrator (Entry Point)
 Coordinates the full E2E pipeline build from empty repo to validated pipeline. Run via:
 ```bash
-claude --agent dbt-pipeline-orchestrator "Build a pipeline"
+claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator "Build a pipeline"
 ```
 Requires ONE discovery Q&A + ONE design approval, then runs autonomously.
 
@@ -241,7 +271,7 @@ ls "1 - Documentation/data-profiles/"
 
 Drop source CSVs into the repo, then run:
 ```bash
-claude --agent dbt-pipeline-orchestrator "Build a pipeline"
+claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator "Build a pipeline"
 ```
 
 The orchestrator runs the full 12-stage workflow:
@@ -304,9 +334,10 @@ In manual mode, **specialists still read `1 - Documentation/pipeline-design.md`*
 Claude Code creates temporary `tmpclaude-*-cwd` files in the root directory during operations.
 
 ```bash
-# Remove Claude Code temporary files
-rm tmpclaude-*-cwd 2>/dev/null
+rm -f tmpclaude-*-cwd
 ```
+
+The `-f` flag suppresses "no such file" errors without needing a shell redirect. Atomic command, single operation — consistent with this project's Bash command rules.
 
 ---
 

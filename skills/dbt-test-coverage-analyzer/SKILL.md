@@ -149,32 +149,30 @@ Checks if models have:
 ## Integration with CI/CD
 
 ### Pre-commit Hook
+
+The analyzer script uses its existing `--target <percentage>` flag as both the reporting target AND the enforcement threshold. When coverage is below target, the script exits with code 1 automatically. Enforcement is therefore a single atomic Bash call — no shell variables, command substitution, or conditional blocks required. Consistent with this plugin's atomic-commands rule and works identically inside Claude Code and inside CI runners.
+
 ```bash
 # .git/hooks/pre-commit
-python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --format json > coverage.json
-COVERAGE=$(jq -r '.overall_percentage' coverage.json)
-
-if (( $(echo "$COVERAGE < 80" | bc -l) )); then
-    echo "❌ Test coverage is $COVERAGE%, below 80% target"
-    exit 1
-fi
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --target 80
 ```
+
+If the analyzer exits with code 1, the pre-commit hook fails the commit. The script prints the report to stdout so the user can see what's missing — no further scripting needed.
 
 ### GitHub Actions
+
+A single atomic step handles both reporting and enforcement, because `--target 80` makes the script exit 1 when coverage drops below 80%:
+
 ```yaml
 - name: Check dbt Test Coverage
-  run: |
-    python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --detailed
-    python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --format json > coverage.json
-
-- name: Fail if below target
-  run: |
-    COVERAGE=$(jq -r '.overall_percentage' coverage.json)
-    if (( $(echo "$COVERAGE < 80" | bc -l) )); then
-      echo "::error::Test coverage $COVERAGE% is below 80% target"
-      exit 1
-    fi
+  run: python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --detailed --target 80
 ```
+
+GitHub Actions surfaces the non-zero exit as a step failure and shows the detailed report in the step log. No need for shell variables, `jq`, `bc`, separate enforcement steps, or conditional blocks in the workflow YAML. One atomic command does the whole job.
+
+> **Note on the `--target` flag:** the flag is already part of the script — `--target <percentage>` serves as both the coverage target shown in the report and the threshold for exit-code enforcement. The default is 80%. Pass a different number to enforce a different target. The legacy shell-pipeline pattern (using `jq` to parse JSON output and `bc` to compare thresholds) is intentionally not shown as an example in this SKILL.md because it violates the plugin's atomic-commands rule and teaches users a pattern that breaks in Claude Code background subagents. Write enforcement logic in the Python script, not in shell.
+>
+> **Caveat for interactive use:** the script's exit-1-on-below-target behavior is unconditional — even a one-off interactive invocation like `python analyze_coverage.py --format json` will exit 1 if coverage is below the default target of 80%. This is the desired behavior for CI but can be surprising in interactive contexts. If you want exit-0 inspection without enforcement, pass a permissive target like `--target 0`, which always passes. A future enhancement could add an explicit `--no-fail` flag to separate report-only from enforcement semantics — see the open follow-ups in `_Documentation/plugin_learnings.md` Finding 9.
 
 ## Output Formats
 

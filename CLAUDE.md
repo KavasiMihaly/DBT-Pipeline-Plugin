@@ -66,6 +66,62 @@ reference/             # Style guides and model examples
 - Skill definitions live in `skills/<name>/SKILL.md` with scripts in `skills/<name>/scripts/`
 - The MCP server TypeScript source is in `servers/src/`, compiled output in `servers/dist/`
 
+## Issue Tracker Maintenance
+
+This plugin has a dedicated issue tracker at **`_Plan/Issues.md`** that captures every known problem, empirical verification need, architectural risk, and enhancement. A companion **`_Plan/Backlog.md`** tracks forward-looking planned work per the user's global CLAUDE.md convention.
+
+**Core policy:** never silently fix an issue or discover a problem without adding an entry to `Issues.md`. If you identify a problem during development, testing, or research — even a small one — create an entry before (or in the same commit as) the fix. Undocumented fixes are invisible to future contributors and to empirical verification passes.
+
+### Where does something go?
+
+| Situation | File |
+|---|---|
+| Known bug in existing code | `Issues.md` → category `bug` |
+| Unverified claim that needs a fresh-install test | `Issues.md` → category `empirical` |
+| Missing or wrong documentation | `Issues.md` → category `docs` |
+| Improvement to working feature | `Issues.md` → category `enhancement` |
+| Architectural concern about current design | `Issues.md` → category `risk` |
+| Planned new feature built from scratch | `Backlog.md` as a backlog row |
+| Question for the user | Ask in conversation, do not file |
+| Conversational context | Do not file |
+
+### Issue entry schema
+
+Every new row in `Issues.md` needs:
+
+```
+| I-### | Title (short noun phrase) | category | severity | status | YYYY-MM-DD | Source (finding/session/commit) | Blocker or next step |
+```
+
+- **ID:** sequential `I-###`, never reused even after closing. Check the highest existing ID in the file and increment.
+- **Category:** `empirical` | `bug` | `docs` | `enhancement` | `risk`
+- **Severity:** `critical` (blocks shipping) | `high` | `medium` | `low`
+- **Status:** `open` → `in-progress` → `resolved` (fixed, awaiting verification) → `closed` (verified on fresh install) → optionally `archived`. Special states: `blocked` (waiting on something external), `wontfix` (decided not to address).
+- **Found date** and **Source** let future contributors trace the origin of the issue without re-reading the whole conversation history.
+
+### Lifecycle
+
+1. **Discovery** — add the row immediately with status `open`. Don't wait until you have time to fix it.
+2. **Triage** — set category and severity. If `critical`, flag it in the next status message to the user.
+3. **Work** — set status to `in-progress` when you start. Link any supporting research in `_Research/` or plan files in `_Plan/<name>.md` from the `Source` column.
+4. **Fix** — commit the fix, set status to `resolved`.
+5. **Verify** — after fresh-install testing (or equivalent verification), set status to `closed`. Add a verification note to the `Blocker` column like "verified on fresh install 2026-05-01 — profile JSONs produced as expected."
+6. **Archive** — closed items older than 30 days can be moved to `_Plan/Issues-Archive.md` to keep the active tracker tight.
+
+### When to review
+
+- **Before every plugin release:** walk through every `open` and `resolved` `empirical` / `critical` item. Nothing ships with a critical empirical verification unresolved.
+- **After every significant development session:** add new entries for anything discovered during the session. The session ends with a clean Issues.md, or it doesn't end.
+- **Weekly cleanup:** archive closed items > 30 days old, re-triage items that have been open too long, consolidate any duplicates.
+
+### Anti-patterns to avoid
+
+- **Don't file an issue and then forget to add the ID to commits that touch related code.** Reference the `I-###` ID in commit messages ("fix: use --target flag instead of nonexistent --fail-below (I-018)") so the history is searchable.
+- **Don't silently close issues because "we're not going to fix that."** Use `wontfix` status with a short explanation in the `Blocker` column. Future contributors will reopen it if they disagree and the explanation will help them decide.
+- **Don't reuse IDs.** Even if an issue was closed in error, create a new ID for the rediscovered problem. Link to the old one in the notes.
+- **Don't use the issue tracker as a to-do list for this conversation.** Task tracking inside a single session belongs in TaskCreate; the issue tracker is for problems that persist across sessions.
+- **Don't mix backlog-style planned work into the issue tracker.** New features go in `Backlog.md`. Only file in `Issues.md` if there's an existing problem to fix.
+
 ## Lessons Learned (plugin-specific gotchas)
 
 Running notes on issues discovered while building and installing this plugin on fresh machines. Every entry includes the change, the reason, and the date. Full context and conference-talk narrative: [`_Documentation/plugin_learnings.md`](_Documentation/plugin_learnings.md).
@@ -92,13 +148,20 @@ The marketplace name is **not** part of the namespace — only the plugin name (
 
 **How to avoid regression:** Any new background `Task(...)` spawn in this plugin **must** pass `mode: "acceptEdits"` at the call site. Do not rely on the spawned agent's frontmatter. This applies to every `run_in_background: true` call.
 
-### 2026-04-14 — Remove `permissionMode:` from all plugin-shipped agent frontmatter
+### 2026-04-14 — Remove `permissionMode:` from all plugin-shipped agent frontmatter (and clarify the plugin-level vs agent-level distinction)
 
 **Change:** Stripped `permissionMode: default` / `permissionMode: acceptEdits` from the orchestrator and four builder agents (`dbt-staging-builder`, `dbt-dimension-builder`, `dbt-fact-builder`, `dbt-test-writer`).
 
-**Reason:** The Claude Code plugins reference explicitly lists `permissionMode` as **not supported for plugin-shipped agents** — "for security reasons, `hooks`, `mcpServers`, and `permissionMode` are not supported." Leaving those lines in the frontmatter is misleading because they imply behavior that never takes effect once installed. They also hid the real problem (Finding 2 above) during development. Permission control now happens at the call site via the orchestrator's `mode: "acceptEdits"` parameter.
+**Reason:** The Claude Code plugins reference explicitly lists `permissionMode`, `hooks`, and `mcpServers` as **not supported for plugin-shipped agents** — "for security reasons, `hooks`, `mcpServers`, and `permissionMode` are not supported." **Crucial distinction:** this restriction applies only to fields declared inside an agent's own `agent.md` YAML frontmatter. It does NOT apply to fields declared at the plugin level in `plugin.json`. The existing `plugin.json` in this repo already demonstrates this: it successfully ships a `sql-server-mcp` MCP server and three `PreToolUse` / `WorktreeCreate` / `WorktreeRemove` hooks at plugin level, and they all load normally.
 
-**How to avoid regression:** Never add `permissionMode`, `hooks`, or `mcpServers` fields to any agent frontmatter in this repo. Those concerns belong in `plugin.json` (for plugin-level hooks and MCP servers) or at the spawn call site (for per-invocation permission mode).
+The asymmetry is deliberate. Plugin-level declarations in `plugin.json` are auditable at install time — users can inspect them before enabling the plugin. Agent-level declarations would move privilege-granting into an unaudited runtime surface (because agents are spawned dynamically, not declared upfront). Stripping those fields from agent frontmatter forces all privilege declarations back into `plugin.json`, which is the audited contract.
+
+Leaving stripped fields in agent frontmatter was misleading in another way: they implied behavior that never took effect once installed, and they hid the real problem during development (the agents appeared fully autonomous in dev because the frontmatter was honored there). Permission control now happens either at the call site via the orchestrator's `mode: "acceptEdits"` parameter on each Task spawn, or at the plugin level via a `PreToolUse` hook (see the 2026-04-14 hook entry below).
+
+**How to avoid regression:**
+- **Never add `permissionMode`, `hooks`, or `mcpServers` fields to any agent frontmatter** in this repo. Those concerns belong in `plugin.json` (for plugin-level hooks and MCP servers) or at the spawn call site (for per-invocation permission mode).
+- **Do add `hooks` and `mcpServers` to `plugin.json`** when you need them. Plugin-level declarations are fully supported and are the correct place for plugin-wide capabilities.
+- **When you see a doc sentence saying "X is not supported for plugins," read the scope carefully.** "For plugin-shipped agents" means "in agent frontmatter," not "anywhere in the plugin." Getting this distinction right unblocks capabilities that would otherwise look forbidden — including the hook-based Bash auto-approval pattern documented in the 2026-04-14 hook entry below.
 
 ### 2026-04-14 — Remap `CLAUDE_PLUGIN_OPTION_*` env vars to bare names in every SQL-aware Python script
 
@@ -201,6 +264,75 @@ Bare-name skill references were failing silently: when an agent declared `skills
 5. **To customize, users must fork the plugin**, not hand-edit the cached copy. Same pattern as `node_modules/` or `site-packages/` — managed code, not sandbox.
 
 **Implication for plugin authors:** Plugin releases are production deploys from the user's perspective. Users have no in-place escape hatch for plugin bugs. This raises the bar for pre-release testing on fresh installs — there is no customer-side workaround for shipping a broken plugin.
+
+### 2026-04-14 — Plugin-level `PreToolUse` hook auto-approves plugin-internal Bash calls for background subagents
+
+**Change:** Added `hooks/approve-plugin-bash.py` (a Python PreToolUse hook) and registered it in `plugin.json` with matcher `Bash`. The hook reads the PreToolUse JSON payload from stdin, splits the Bash command into subcommands at shell operators (`&&`, `||`, `;`, `|`, `|&`, `&`, newline), and returns `permissionDecision: "allow"` only when **every** subcommand matches a narrow allowlist. If any subcommand is not on the allowlist, the hook returns an empty decision and the call falls through to the default permission flow.
+
+Updated every Task spawn prompt in the orchestrator (Stages 2, 7, 8, 9, 10, 11) to include the explicit script path the agent should run, as defense-in-depth against Issue #13627 (agent body content may be silently dropped at spawn time per the Finding 6 research).
+
+**Reason:** `acceptEdits` permission mode only auto-accepts file edits and filesystem Bash commands (`mkdir`, `cp`, `mv`, `touch`, etc.) — it does NOT auto-accept arbitrary Bash like `python profile_data.py` or `python run_dbt.py run`. In a **background** subagent, any non-filesystem Bash call stalls because the permission layer tries to prompt the user, and background subagents have no interactive channel. This was the root cause of the user's "data-profiler was called but no profile document was created" symptom: the `data-explorer` agent spawned background, tried to run `python profile_data.py`, got silently refused at the permission layer, and fell back to reading CSVs with its Read tool (producing a degraded summary with none of the profiler's intelligence).
+
+The PreToolUse hook is the only supported mechanism that:
+1. Works for background subagents (fires before the permission prompt, can skip the prompt entirely)
+2. Ships automatically with the plugin (no user setup, no `settings.json` editing)
+3. Has a narrow, auditable allowlist (every approved pattern lives in one Python file)
+4. Does not require `bypassPermissions` mode (which would unlock *all* Bash, not just the plugin's own scripts)
+
+**Allowlist design:** The allowlist was built from a full audit of every `python` / `git` / `ls` / `find` / `mkdir` / `cp` / `wc` / `echo` command in every `agent.md` and `SKILL.md` in the plugin. Six categories:
+
+1. **Plugin Python scripts** — anything matching `python <path>/skills/<skill-name>/scripts/<file>.py <args>`. Covers `profile_data.py`, `query_sql_server.py`, `load_data.py`, `run_dbt.py`, `analyze_coverage.py`, `generate_docs.py`, `initialize_project.py`, `reset_project.py`.
+2. **Narrow `python -c` one-liners** — specific forms only, not all inline Python. Includes the pyodbc driver check (`python -c "import pyodbc; print(pyodbc.drivers())"`) and the CSV file-copy helper in `dbt-architecture-setup` (`python -c "import shutil, glob, os; ..."`). Other `python -c` strings fall through to default flow.
+3. **Virtualenv / pip** — `python -m venv`, `pip install`, `pip list`, etc.
+4. **Git commands** — `git init`, `git status`, `git add`, `git commit`, `git rev-parse`, `git worktree`, etc. (needed by Stage 5 scaffold init and Stages 8/9 worktree isolation).
+5. **Filesystem discovery** — `find . -name "*.csv"`, `ls *.csv`, `ls dbt_project.yml`.
+6. **Folder and file ops** — `mkdir -p "2 - Source Files"`, `cp *.csv "2 - Source Files/"`, `wc -l`, `echo` with simple literals.
+
+**Compound-command safety:** The hook uses a proper shell-aware splitter that respects single and double quotes — operators inside string arguments are not treated as split points. It also handles subshell parentheses `(...)`. Every subcommand in a pipeline or sequence must independently match the allowlist; a single non-matching subcommand causes the whole call to fall through. This matches the Claude Code permissions model's "a rule must match each subcommand independently" requirement and prevents smuggling attacks like `python run_dbt.py run && rm -rf /`.
+
+**How to avoid regression:**
+- **Any new Bash command** added to an agent body or SKILL.md — whether in the orchestrator, a specialist, or a new skill — **must** be added to the allowlist in `hooks/approve-plugin-bash.py` before it can run in a background subagent.
+- **When adding a new Python script to a skill**, no allowlist change is needed — the generic `python <path>/skills/<skill>/scripts/<file>.py` pattern covers it automatically. This is the primary reason the allowlist is structured around a generic pattern for the main case and narrow literal patterns only for exceptions.
+- **Never add broad wildcard patterns** like `python -c .*` or `Bash(*)` to the allowlist — every new pattern should be as narrow as possible and have a comment explaining exactly which stage of the pipeline uses it.
+- **Audit the allowlist when refactoring commands.** If a stage's Bash call is changed (e.g. from `dbt run` via the Python wrapper to some other form), verify that the allowlist still covers the new form before shipping.
+- **Every Task spawn prompt in the orchestrator should include the explicit script path** the spawned agent needs to run. This is defense-in-depth against Issue #13627 (agent body content may be silently dropped at spawn time). Don't rely on the spawned agent's body content to tell it which script to call — put the path in the orchestrator's prompt string.
+
+**Empirical verification needed on next fresh install:**
+1. Does the hook actually fire for Bash calls in background subagents? (The docs say yes, but we haven't tested.)
+2. Does the `permissionDecision: "allow"` response actually skip the permission prompt for background-mode calls? (Documented as yes, but the interaction with background-mode prompt suppression is not explicitly tested.)
+3. Do all the profile JSON files actually appear in `1 - Documentation/data-profiles/` after Stage 2?
+
+If any of those fail, the fallback is either (a) adding more narrow allowlist patterns, (b) switching specific stages to `bypassPermissions` mode, or (c) moving Bash calls out of subagents entirely to the orchestrator main thread.
+
+### 2026-04-14 — Atomic Bash commands only — no compound shell expressions anywhere in the plugin
+
+**Change:** Refactored the orchestrator's Stages 0, 5, and 6 to use single atomic Bash commands instead of compound shell expressions. Simplified `hooks/approve-plugin-bash.py` to remove now-unused compound-only patterns. Added the atomic-command rule to the global `~/.claude/CLAUDE.md` so it applies across all projects and all script generation.
+
+Specific commands changed in `agents/dbt-pipeline-orchestrator/agent.md`:
+
+| Before | After |
+|---|---|
+| `find . -name "*.csv" -type f 2>/dev/null` | `find . -name "*.csv" -type f` |
+| `ls dbt_project.yml 2>/dev/null && echo "INCREMENTAL_MODE" \|\| echo "FRESH_BUILD"` | `ls dbt_project.yml` (orchestrator reads exit code / output and decides the mode in LLM text) |
+| `git rev-parse --git-dir 2>/dev/null \|\| (git init && git add -A && git commit -m "Initial scaffold")` | Four atomic calls: `git rev-parse --git-dir`, then if fails `git init`, `git add -A`, `git commit -m "Initial scaffold"` |
+| `ls "2 - Source Files/"*.csv \| wc -l` | `find "2 - Source Files" -name "*.csv" -type f` (orchestrator counts lines in LLM text) |
+
+**Reason:** Claude Code's permission layer matches rules per subcommand of any shell expression. Compound operators (`&&`, `||`, `;`, `|`, subshells) force the permission layer to split the command and evaluate each part — and any part that is not allowlisted causes the whole call to fall through to the interactive permission prompt. In background subagents (which have no interactive channel), this means the tool call stalls silently.
+
+Atomic commands bypass this problem entirely:
+- **Filesystem atomic commands** (`mkdir`, `touch`, `mv`, `cp`, `rm`) are **auto-approved under `acceptEdits` mode** — no hook needed.
+- **Non-filesystem atomic commands** (`python script.py`, `git init`, `find -name`) are individually matchable by a simple allowlist pattern in the plugin's `PreToolUse` hook.
+- **Compound expressions** are neither auto-approved nor cleanly allowlistable, requiring a complex compound-command splitter in the hook that is fragile, a security surface, and a maintenance burden.
+
+Before this refactor, `hooks/approve-plugin-bash.py` needed ~60 lines of quote-aware compound-command splitter code just to handle the orchestrator's four compound commands. After the refactor, the splitter could be removed (kept as defensive fallback) and the allowlist collapsed to simple single-command patterns that match individual atomic calls.
+
+**Token cost acknowledged:** converting compound commands to atomic equivalents increases per-session token usage by roughly 1–3% — each extra Bash tool call carries ~50–80 tokens of protocol overhead (tool_use block, tool input JSON, tool_use_id, tool_result block), and breaking one compound into 3–4 atomic calls adds ~200–300 tokens per refactored workflow step. Across a full pipeline build with ~10–15 refactored operations, that's ~2,000–4,500 extra tokens per run. This cost is worth paying because the alternative is a plugin that stalls silently on background subagent invocations, which is not shippable.
+
+**How to avoid regression:**
+- **Grep every new agent.md / SKILL.md / hook / orchestrator stage file for `&&`, `||`, `;`, `|` (as shell operators), subshells `(...)`, `$(...)`, backticks, and heredocs before committing.** Any match that is not inside a quoted string argument is a violation.
+- **When adding a new pipeline step that needs multiple commands**, split into sequential Bash tool calls that the orchestrator issues in order, reading each command's output before issuing the next. If the logic is genuinely complex (many interdependent commands), write a Python script in the appropriate `skills/<name>/scripts/` directory and call it as a single atomic invocation.
+- **Never reintroduce shell-level conditionals or pipelines** to "save a tool call." The token savings are small; the reliability cost of losing background-subagent compatibility is catastrophic.
+- **Also applies to SKILL.md documentation code blocks** — users will copy-paste examples from SKILL.md. Ship atomic examples so users don't learn patterns that will break in automation.
 
 ### General rule — test on a fresh install, not in dev
 

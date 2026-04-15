@@ -79,7 +79,7 @@ This is the finding that most deserves a dedicated slide: it's the exact story o
 
 ---
 
-## Finding 2 — Plugin-shipped agents cannot declare `permissionMode`
+## Finding 2 — Plugin-shipped agents cannot declare `permissionMode`, `hooks`, or `mcpServers` in their frontmatter — but the plugin itself can
 
 ### What I learned
 
@@ -87,23 +87,67 @@ From the Claude Code plugins reference, under "Agents":
 
 > "Plugin agents support `name`, `description`, `model`, `effort`, `maxTurns`, `tools`, `disallowedTools`, `skills`, `memory`, `background`, and `isolation` frontmatter fields. **For security reasons, `hooks`, `mcpServers`, and `permissionMode` are not supported for plugin-shipped agents.**"
 
-This is a security boundary: a malicious plugin could otherwise install itself and silently grant itself broad write access, or attach background hooks and MCP servers that run without user awareness. By stripping those three fields at load time, Claude Code forces plugin permissions to come from either the user's explicit approval in-session or from fields the user controls in their settings.
+The crucial qualifier in that sentence is **"for plugin-shipped agents."** The restriction applies only to fields declared inside an agent's own `agent.md` YAML frontmatter — not to fields declared at the plugin level in `plugin.json`. This distinction is easy to miss on first read, and it confused me early in the build until I noticed the plugin already had a working PreToolUse hook and a working MCP server — both shipped at plugin level, both unaffected by this restriction.
+
+The two scopes:
+
+| Scope | Location | `hooks` | `mcpServers` | `permissionMode` |
+|---|---|---|---|---|
+| **Plugin level** | `plugin.json` `hooks` block, `mcpServers` block, `settings.json` | ✅ Supported | ✅ Supported | (not a field) |
+| **Agent level** | Inside `agents/<name>/agent.md` YAML frontmatter | ❌ Stripped at load | ❌ Stripped at load | ❌ Stripped at load |
+
+**Why the asymmetry is a deliberate security boundary.** A plugin-level hook or MCP server is declared in `plugin.json`, which users can inspect at install time and audit before enabling the plugin. The plugin manifest is the plugin's public contract — it's visible in the marketplace, greppable in the source repo, and surfaced in `/plugin` inspection commands. In contrast, agents are spawned dynamically during sessions, so letting each agent attach its own hooks and MCP servers at spawn time would move privilege-granting into an unaudited surface. Stripping those fields from agent frontmatter forces all plugin-level privilege declarations back into `plugin.json`, where they can be reviewed before the user enables the plugin.
+
+The same reasoning applies to `permissionMode` on agents. Letting a plugin-shipped agent silently upgrade itself to `acceptEdits` or `bypassPermissions` at spawn time would be a privilege escalation without user awareness. So `permissionMode` on an agent is stripped, and permission control must come from the call site (the parent agent passing `mode: "acceptEdits"` at Task invocation) or from session-wide settings.
+
+### Evidence in this plugin
+
+The existing `plugin.json` already demonstrates both supported paths:
+
+```json
+{
+  "mcpServers": {
+    "sql-server-mcp": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/servers/dist/minimal-mcp-server.js"],
+      "env": { ... }
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/validate-dbt-structure.py"
+          }
+        ]
+      }
+    ],
+    "WorktreeCreate": [...],
+    "WorktreeRemove": [...]
+  }
+}
+```
+
+The plugin ships **1 MCP server and 3 hook event registrations** at plugin level, and they all load and fire normally. The restriction never applied to them.
 
 ### How it broke
 
-Four of the builder agents (`dbt-staging-builder`, `dbt-dimension-builder`, `dbt-fact-builder`, `dbt-test-writer`) all had:
+Four of the builder agents (`dbt-staging-builder`, `dbt-dimension-builder`, `dbt-fact-builder`, `dbt-test-writer`) plus the orchestrator all had `permissionMode: acceptEdits` in their frontmatter. During development outside the plugin context (via standalone `.claude/agents/` or `--plugin-dir ./`) this made the agents fully autonomous — they could `Write` and `Edit` files without prompting. When installed as a plugin, that line was silently dropped. The agents still ran, but any `Write`/`Edit` call triggered a permission prompt, and in background-spawned subagents the prompt went nowhere and the tool call stalled.
 
-```yaml
-permissionMode: acceptEdits
-```
+The fix was to remove the dead `permissionMode:` lines from all five agent files and add `mode: "acceptEdits"` at the **call site** in the orchestrator's Task spawn calls instead — the call-site form is the supported equivalent, and it's not stripped because it's declared by the parent agent at spawn time rather than baked into the child's frontmatter.
 
-in their frontmatter. During development outside the plugin context this made the agents fully autonomous — they could `Write` and `Edit` files without prompting. When installed as a plugin, that line was silently dropped. The agents still ran, but any `Write`/`Edit` call triggered a permission prompt.
+### One more thing the restriction does NOT block
 
-This is only a visible problem when agents run in the foreground — in the background, it's invisible and fatal (see Finding 3).
+Since the restriction is agent-frontmatter-only, **the plugin CAN ship additional `PreToolUse` hooks at plugin level** to extend permission evaluation for tools that would otherwise block background subagents. This is the basis for Finding 9 — the plugin now adds a plugin-level PreToolUse hook that auto-approves Bash calls matching specific plugin-internal script patterns, so background subagents can run `python profile_data.py` and `dbt run ...` without getting blocked by permission prompts. This is fully within the security boundary: the hook is visible in `plugin.json`, its allowlist is visible in `hooks/approve-plugin-bash.py`, and the auditable surface is all at install time.
 
 ### Takeaway for the talk
 
-> **Plugin frontmatter isn't a superset of standalone agent frontmatter.** Fields that grant elevated privileges are stripped at load time. If your agent relies on `permissionMode` to function, it will not work as a plugin. You have to either pass the mode at call time (foreground) or design the flow so permission prompts can actually reach a human.
+> **"Not supported for plugin-shipped agents" means "not supported in agent frontmatter," not "not supported anywhere in the plugin."** Plugin-level `hooks`, `mcpServers`, and auditable permission rules in `plugin.json` are fully available. The restriction is a security boundary that forces privilege declarations into the user-auditable surface (the plugin manifest), not a limitation on what plugins can do overall.
+>
+> Getting this distinction right matters because it unblocks a whole category of capabilities — like the auto-approval hook pattern in Finding 9 — that would otherwise look impossible. Read the docs twice when they say "X is not supported for plugins": the scope of "for plugins" is often narrower than it sounds.
 
 ---
 
@@ -522,9 +566,251 @@ Not a correctness issue — the current form works. Just a cleanliness improveme
 
 ---
 
-## Finding 9 — Development vs installed behavior diverges
+## Finding 9 — Background subagents cannot run arbitrary Bash without a plugin-level PreToolUse approval hook
 
-A theme across all eight preceding findings: **the plugin behaves differently when you're developing it vs. when it's installed from a marketplace**. During dev you can point Claude Code at the plugin directory with `--plugin-dir ./`, or drop the agents into `.claude/agents/`, and everything works under bare names with full `permissionMode` support. Install the same plugin on a fresh machine via the marketplace and half of your assumptions silently break.
+### What I learned
+
+`acceptEdits` permission mode is more limited than its name suggests — and that limit directly blocks every Python-script call inside a background subagent until you work around it at the plugin level. This finding is the direct continuation of Finding 3 (background agents cannot satisfy permission prompts), refined with the specific mechanism that actually solves it.
+
+Here is what `acceptEdits` really does, per the Claude Code permissions reference:
+
+> "`acceptEdits`: Automatically accepts file edits and **common filesystem commands (`mkdir`, `touch`, `mv`, `cp`, etc.)** for paths in the working directory or `additionalDirectories`"
+
+So `acceptEdits` does unlock a narrow slice of Bash — filesystem shuffling commands like `mkdir`, `touch`, `mv`, `cp`, plus the expected `Write`/`Edit` file-modification tools. But **arbitrary Bash like `python profile_data.py` or `dbt run` is still subject to the normal permission flow**, which in a background subagent means "stalls silently waiting for a prompt that will never come."
+
+I had been treating `acceptEdits` as "background agents can do everything" when it's really "background agents can do filesystem moves and file writes." The gap between those two is exactly where every Python invocation and every `dbt` call lives in this plugin's workflow — Stages 2, 6, 7, 8, 9, 10, 11, all of them. The net effect was: the namespacing was right, the permission mode was right for its stated purpose, the script paths were right, the env vars were right, and the plugin still couldn't actually run the data-profiler because Bash was blocked upstream of all of that.
+
+### How it broke (and kept breaking)
+
+Concretely, on a fresh install the user saw the orchestrator successfully spawn the data-explorer subagent, the subagent successfully find the CSV files, and then… produce no profile outputs. When we investigated, the data-explorer agent's own self-report was:
+
+> "I'm unable to execute Bash commands."
+
+It tried to run `python profile_data.py --file customers.csv`, the permission layer wanted to prompt, the background subagent had no channel for the prompt, and the Bash call was silently refused. The agent fell back to reading the CSV file contents with its Read tool — which gave it some of the information, but none of the primary-key detection, type inference, or test recommendations that the profiler script was designed to produce. The "profile" it returned was missing everything the downstream stages actually needed.
+
+This was not a one-off. The same limitation would have affected:
+
+| Stage | Subagent | Blocked command |
+|---|---|---|
+| 2 | data-explorer | `python profile_data.py` |
+| 7 | dbt-staging-builder | `dbt parse`, `dbt run --select stg_*` |
+| 8 | dbt-dimension-builder | `dbt run --select dim_*` (per worktree) |
+| 9 | dbt-fact-builder | `dbt run --select fct_*` (per worktree) |
+| 10 | dbt-test-writer | `dbt test --select <model>` |
+| 11 | dbt-pipeline-validator | `dbt build --full-refresh` |
+
+Every stage after the plan approval would have stalled in the same way, producing silent partial failures that look like "the orchestrator is working" until you notice nothing actually ran.
+
+### Fix applied — plugin-level PreToolUse auto-approval hook
+
+From the Claude Code permissions docs:
+
+> "Claude Code hooks provide a way to register custom shell commands to perform permission evaluation at runtime. When Claude Code makes a tool call, **PreToolUse hooks run before the permission prompt. The hook output can deny the tool call, force a prompt, or skip the prompt to let the call proceed.**"
+
+PreToolUse hooks can auto-approve a tool call. The hook contract is an exit-code-0 JSON emit on stdout:
+
+```json
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "allow",
+    "permissionDecisionReason": "<human-readable explanation>"
+  }
+}
+```
+
+When a PreToolUse hook returns `permissionDecision: "allow"`, the permission prompt is skipped entirely — which is exactly what we need for background subagents. And crucially, per Finding 2, **plugin-level hooks are fully supported**: it's only agent-frontmatter hooks that are stripped. So a plugin can ship a PreToolUse hook at the plugin level, register it in `plugin.json`, and have it fire for every Bash tool call across every subagent in every session where the plugin is enabled.
+
+The fix we applied:
+
+1. **Created `hooks/approve-plugin-bash.py`** — a Python hook script that reads the PreToolUse JSON from stdin, inspects the Bash command, and auto-approves calls matching a narrow allowlist: plugin-internal Python scripts (`python "${CLAUDE_PLUGIN_ROOT}/skills/*/scripts/*.py" ...`), `dbt` CLI commands (`dbt run/test/build/parse/debug/seed/snapshot/compile/deps/list`), `git` commands used by scaffolding and worktree isolation, filesystem discovery (`find -name "*.csv"`, `ls`), and virtualenv/pip operations used by the initializer. Any Bash command not on the allowlist falls through to the default permission flow — the hook does not broadly unlock the shell.
+
+2. **Registered the hook in `plugin.json`** alongside the existing `validate-dbt-structure.py` hook, with matcher `Bash`:
+
+   ```json
+   "PreToolUse": [
+     {
+       "matcher": "Write|Edit",
+       "hooks": [
+         { "type": "command", "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/validate-dbt-structure.py" }
+       ]
+     },
+     {
+       "matcher": "Bash",
+       "hooks": [
+         { "type": "command", "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/approve-plugin-bash.py" }
+       ]
+     }
+   ]
+   ```
+
+3. **Updated the orchestrator's Stage 2 prompt** to include the explicit script path (`python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file <csv-path> --format json`), as defense-in-depth against Issue #13627 (the "agent body content silently dropped at spawn time" concern from Finding 6 research). Even if the data-explorer's own body content isn't reaching the spawned subagent, the orchestrator's prompt alone now contains enough for the subagent to know what to run.
+
+The hook is narrow, auditable (all patterns live in one Python file, greppable at install time), and scoped only to Bash commands the plugin actually needs. Everything else still flows through the normal Claude Code permission layer, so a user running this plugin doesn't lose control over arbitrary Bash — they only auto-approve the things the plugin authored.
+
+### Why this is the right architecture vs. the alternatives
+
+I considered four paths before settling on this one:
+
+1. **`bypassPermissions` mode at the call site** — works, but auto-unlocks *all* Bash for every spawned subagent. Way too broad, violates the user's global rule against `bypassPermissions` in background contexts, and makes the plugin's security surface effectively "everything."
+2. **`dontAsk` mode + user-added `permissions.allow` rules** — works, but requires every user to hand-edit their `settings.json` to add `Bash(python *)` allowances before running the plugin. Install-step footgun and bad UX.
+3. **Skill `allowed-tools: Bash(python *)`** — officially this pre-approves Bash for the listed patterns while the skill is active, but the contract for "active" when a skill is preloaded into a subagent via the agent's `skills:` frontmatter (vs. invoked directly) is unclear in the docs. Would have been a one-line fix if it worked, and 0% confidence that it would.
+4. **PreToolUse hook at plugin level** — the chosen path. Known-to-work per the docs, zero user setup, narrow allowlist auditable in one file, plugin-shipped so it benefits every install automatically.
+
+The hook approach wins on every axis except simplicity — it's more code than Option 3 would have been — but it's the only one that ships as a standalone self-contained fix with a clear security contract.
+
+### Confidence caveat
+
+Two things I want to verify empirically on the next fresh-install run:
+
+1. **The PreToolUse hook actually fires for Bash calls in background subagents.** The docs say it does, but I haven't tested. If the permission layer processes background subagent Bash calls in a different code path that doesn't invoke the PreToolUse hook chain, this fix doesn't help.
+2. **The `permissionDecision: "allow"` response actually skips the permission prompt rather than just being a hint that gets overruled by the background-mode check.** Per the docs it's an "allow" decision that bypasses the prompt, but the interaction with background-subagent-mode-specific prompt-suppression is not documented.
+
+If either of those turns out not to work, the fallback options are: (a) switch to `bypassPermissions` mode for specific stages as a last resort, or (b) move all Bash calls to the orchestrator main thread (the Option B from the earlier analysis). The fallbacks aren't great but they exist.
+
+### Takeaway for the talk
+
+> **Permission mode names are marketing, not specification.** `acceptEdits` doesn't accept all edits — it accepts file edits and filesystem Bash. `bypassPermissions` doesn't bypass all permissions — it still prompts for writes to `.git` and a few other protected paths. The actual semantics of each mode are documented, but the names are cleaner than the docs. Read the docs, not the names.
+>
+> **Background subagents live inside an inherently-limited permission context.** There is no mode flag or spawn parameter that makes a background subagent behave like a foreground main thread. The only escape hatch is a PreToolUse hook at plugin level, and it only works for tool calls whose permission flow goes through the hook chain. Build your plugin architecture assuming background subagents can WRITE files, READ files, and RUN filesystem Bash — and nothing else — unless you ship a hook to extend their reach.
+>
+> **Security boundaries are asymmetric and worth mapping.** Agent frontmatter can't declare hooks (Finding 2). But plugin-level `plugin.json` CAN declare hooks, and those hooks can auto-approve Bash calls that agent-level mechanisms couldn't authorize. The asymmetry is deliberate: it puts privilege declarations in the user-auditable surface (the plugin manifest) instead of in runtime-only agent metadata. Understanding where the boundary is lets you build capabilities that initially look forbidden.
+
+This is the finding that most deserves a live-demo slide in the talk. Show the broken behavior ("data-explorer runs, claims to profile, produces nothing"), then the hook script on screen, then the fixed behavior ("data-explorer runs, profile JSON files materialize, orchestrator moves on to Stage 3"). The narrative is: we spent three rounds chasing upstream bugs — namespaces, permissions, script paths, env vars — and then discovered that the real blocker was one permission layer we'd been working around instead of unblocking. The fix is 150 lines of Python, and it's the single most impactful change in the entire build.
+
+### Round 2 refinement — atomic commands only
+
+After shipping the hook, a second pass caught a structural problem with the original design: the orchestrator was generating **compound shell commands** (`git rev-parse || (git init && git add -A && git commit)`, `ls *.csv | wc -l`, `ls dbt_project.yml && echo "INCREMENTAL" || echo "FRESH"`), which the hook had to handle with a quote-aware compound-command splitter. That splitter was ~60 lines of Python, was a security surface (any bug in the splitter could falsely approve something), and was ultimately unnecessary. A cleaner architectural principle emerged from the audit:
+
+> **Every Bash command — whether Claude runs it directly or generates it inside plugin/skill/agent/hook code — must be a single atomic operation.** No `&&`, no `||`, no `;`, no `|`, no subshells. Sequential and conditional logic belongs in the LLM's text (multiple atomic tool calls), or in a Python script called atomically, not in shell pipelines.
+
+**Why atomic commands match Claude Code's permission model's grain:**
+
+1. **The permission layer evaluates rules per subcommand.** Compound expressions force the permission layer to split and re-check each part. Atomic commands are directly matchable against a single rule with no splitting. Cleaner upstream, cleaner downstream.
+2. **`acceptEdits` mode auto-approves atomic filesystem commands** (`mkdir`, `touch`, `mv`, `cp`, `rm`) with no hook involvement. Compound expressions containing them get no auto-approval even if every piece would individually qualify. Refactoring compound filesystem operations to atomic form therefore eliminates entire classes of commands from needing hook approval at all — `acceptEdits` handles them natively.
+3. **Individual error messages are actionable.** When `git add -A` fails as its own call, we know exactly what failed and can recover. When `git init && git add -A && git commit` fails as a compound, we get one error and have to infer which step broke. Atomic commands turn Bash into a readable log of intent.
+4. **The hook's compound-command splitter becomes defensive code, not load-bearing code.** A complex splitter that exists "just in case" someone writes a compound is much safer than a splitter that has to work every time. The audit surface shrinks.
+
+**The refactor applied** — every compound in the orchestrator converted to atomic form:
+
+| Stage | Before | After |
+|---|---|---|
+| 0 source discovery | `find . -name "*.csv" -type f 2>/dev/null` | `find . -name "*.csv" -type f` (drop the redirect — Claude Code handles stderr) |
+| 0 mode detection | `ls dbt_project.yml 2>/dev/null && echo "INCREMENTAL_MODE" \|\| echo "FRESH_BUILD"` | `ls dbt_project.yml` — orchestrator LLM reads exit code and decides mode in text |
+| 5 git init | `git rev-parse --git-dir 2>/dev/null \|\| (git init && git add -A && git commit -m "Initial scaffold")` | 4 atomic calls: `git rev-parse --git-dir`, then on failure `git init`, `git add -A`, `git commit -m "Initial scaffold"` |
+| 6 verification | `ls "2 - Source Files/"*.csv \| wc -l` | `find "2 - Source Files" -name "*.csv" -type f` — orchestrator counts output lines in LLM text |
+
+Plus corresponding hook simplification: the compound-only `wc -l` and `echo` patterns removed from the allowlist, the compound splitter demoted from load-bearing to defensive fallback, and the allowlist reduced to ~12 narrow single-command patterns.
+
+**Cost of the refactor in token usage — transparently measured:**
+
+Each Bash tool call in Claude Code carries protocol overhead of ~50–80 tokens (the `tool_use` block structure, the tool input JSON, the `tool_use_id`, and the matching `tool_result` block). Refactoring one compound command into 3–4 atomic commands adds approximately **+150–250 tokens per refactored workflow step**. The orchestrator has roughly 10–15 previously-compound operations across Stages 0, 5, 6, and the (prompted-to-run) steps for Stages 7–11. Ballpark total: **+2,000–4,500 tokens per pipeline build session** from the extra tool-call overhead, plus additional tokens from the short LLM text between calls ("that worked, running the next step") which adds maybe another ~500–1,500 tokens.
+
+There's also a persistent per-session cost: the atomic-commands rule added to `~/.claude/CLAUDE.md` is ~18 lines / ~400 tokens that load into every Claude Code session via the `claudeMd` system reminder, regardless of whether the session touches plugin code or not. I originally drafted it at ~60 lines / ~1,100 tokens and tightened it to minimize the ambient cost.
+
+**Net per-session cost: roughly 1–3% more tokens**, depending on how many Bash operations the session performs. For a typical pipeline-build session that already processes 100K–500K tokens, this is a small delta that buys significant reliability.
+
+**What the cost buys:**
+
+- **Correctness for background subagents.** Without atomic commands, the plugin simply doesn't work in background orchestration mode. The hook had to do complex compound-command splitting just to keep one stage alive, and the resulting code was fragile enough that any edge case was a silent stall. This is the dominant value — the plugin goes from "works in dev, stalls on install" to "works consistently" by adopting atomic commands.
+- **Simpler permission architecture.** `acceptEdits` auto-approves filesystem atoms. PreToolUse hook allowlist matches non-filesystem atoms individually. No compound splitting needed for either path. The whole permission story fits on a single conceptual diagram.
+- **Auditable transcripts.** Debugging a failed session means reading a sequence of clearly-named atomic commands with their individual exit codes, instead of parsing compound expressions and inferring which part broke.
+- **Error localization.** A single atomic command failure is actionable ("git add -A failed because the repo has a submodule that needs manual resolution"). A compound failure is diagnostic work ("something in `git rev-parse || (git init && git add -A && git commit)` failed, let me figure out which part").
+- **Safer contributor surface.** A new contributor adding a pipeline stage writes atomic commands, each of which is individually reviewable. They don't have to reason about shell-operator precedence, quoting, or subshell scoping. The rule is "one operation per call" — simple to verify, simple to teach.
+
+**Why we kept the compound-command splitter in the hook as defensive code:**
+
+The splitter is ~60 lines. Removing it would save a tiny amount of maintenance cost. Keeping it means that if a future contributor accidentally writes a compound command (despite the atomic-commands rule in CLAUDE.md and the plugin docs), the hook still handles it correctly — splits the command, checks each part against the allowlist, and approves only if all parts match. This is belt-and-suspenders: the rule says "don't write compounds," the hook says "and if you do, they still need to be safe." Zero additional cost per atomic call (the splitter produces a single-element list trivially), real cost only if something goes wrong — which is exactly where defensive code should live.
+
+### Round 2.5 — I invented a CLI flag that didn't exist, and had to walk it back
+
+A small but instructive mistake surfaced during the compound-command cleanup pass on `dbt-test-coverage-analyzer/SKILL.md`. The original CI examples used a shell pipeline pattern (`python analyze_coverage.py --format json > coverage.json`, then `COVERAGE=$(jq -r '.overall_percentage' coverage.json)`, then a bash conditional with `bc -l`). That's a compound expression, so it had to be refactored to a single atomic command.
+
+Without checking the script, I wrote the rewrite as:
+
+```bash
+python analyze_coverage.py --fail-below 80
+```
+
+…and documented it in SKILL.md and in the updated Lessons Learned entries as "the analyzer script supports a `--fail-below <percentage>` flag (and emits a non-zero exit code when coverage is below the threshold)."
+
+**It doesn't.** The script has no `--fail-below` flag. It has `--target <percentage>` (default 80), and that flag is already used for both the reporting target AND the enforcement threshold — the script exits 1 automatically when coverage is below the target, unconditionally. I invented a plausible-sounding flag name and wrote documentation for a feature that already existed under a different name, mid-refactor. Nobody caught it until I later read the script to verify and noticed the mismatch.
+
+**Why this happened:** when I was deep in the compound-to-atomic refactor, the mental shortcut was "any enforcement that currently lives in shell can be collapsed into a Python flag — the plugin's scripts are ours, so if a flag doesn't exist, we add it." That's a reasonable pattern, but I skipped the step where I actually verify whether the flag exists before documenting it as if it does. The script's existing `--target` flag would have been visible from a single file read.
+
+**The correction:** all `--fail-below` references rewritten to `--target`, with the observation that the flag is unconditionally enforcement-mode (exit 1 when below target, regardless of calling context). The SKILL.md now clearly documents this as "the `--target` flag is both the reporting target and the enforcement threshold; the default is 80%" and adds a caveat that interactive/reporting-only invocations should pass `--target 0` to disable the enforcement exit code.
+
+A **real bug** that was hiding behind the mistake: two Task spawn prompts in the orchestrator (Stages 10 and 11) were also invoking `analyze_coverage.py --format json` without passing `--target`, which meant they were implicitly running with target=80 and might fail with exit code 1 if coverage was below 80% — making the orchestrator's spawned test-writer and validator subagents see a spurious "command failed" signal when the command had actually succeeded but the coverage was below target. Fixed by explicitly passing `--target 0` for the test-writer's reporting-only call (where enforcement is not wanted, the test-writer should parse JSON and iterate) and `--target 80` for the validator's enforcement call (where exit code 1 is a real validation failure signal that should be captured).
+
+**Takeaway for the talk:** when you're mid-refactor and reaching for "the script obviously supports X, I'll just document it," STOP and verify the script actually supports X. The cost of reading the file is seconds; the cost of shipping a plugin with phantom flags in the docs is debugging hours and user confusion. This is adjacent to the "verify on a fresh install" theme from the other findings — don't trust your own assumptions about the code any more than you'd trust the external docs.
+
+This is also a good moment in the talk to make a more general point about LLM-assisted plugin development: **an LLM will happily invent plausible flag names and write documentation for them** — especially under pressure from a mechanical refactor. The mitigation is to treat every flag name in generated docs as a claim that needs to be verified against the source. A pre-commit hook that greps `SKILL.md` for flags referenced in shell commands, then greps the corresponding script for those flags, would have caught this automatically. Worth adding as a CI check.
+
+### Round 3 refinement — where the atomic-commands rule actually lives in the plugin
+
+Once we committed to atomic-commands-only, the next question was **where to put the rule so every piece of generated or executed code respects it**. This turned into a surprisingly layered problem because of a bootstrapping issue with project CLAUDE.md deployment.
+
+**The bootstrapping problem:** the orchestrator launches in an empty target repo (just CSV files, no `CLAUDE.md`). The plugin's architecture-setup skill deploys a project `CLAUDE.md` from a template — but only at Stage 5, after plan approval. So Stages 0-4 of the orchestrator run with no project `CLAUDE.md` available in the target repo at all. Any reference from the orchestrator body to "see the repo CLAUDE.md for the atomic-commands rationale" was pointing to a file that didn't exist yet, and wouldn't exist for five more stages.
+
+**The deeper question:** when Stage 5 does deploy a `CLAUDE.md` to the target repo, does:
+1. The orchestrator itself retroactively pick it up in its existing context?
+2. Subagents spawned AFTER Stage 5 load it into their fresh context at spawn time?
+3. Nothing at all happens until the next Claude Code session in that directory?
+
+**What I learned about Claude Code's CLAUDE.md loading behavior:**
+
+- **Session start loading is deterministic.** When Claude Code starts (or when a subagent spawns into a fresh context window), it scans the working directory and its parents for `CLAUDE.md` files and loads them into the initial system-reminder context via the `claudeMd` mechanism. This is the primary loading path, and it runs once per session/subagent init.
+- **Mid-session lazy loading exists but is triggered by specific events.** There's an `InstructionsLoaded` hook event documented as firing "when a CLAUDE.md or `.claude/rules/*.md` file is loaded into context — at session start and when files are lazily loaded during a session." The "lazily loaded during a session" phrase implies mid-session reload happens, but I couldn't find explicit docs on the exact trigger — likely cwd changes (`cd` into a new directory) or file-watcher events, not every file write.
+- **The orchestrator's own context is fixed from its session start.** The orchestrator is the main-thread agent; its context window is assembled when the user runs `claude --agent <orchestrator>`, at which point the target repo is empty and no `CLAUDE.md` exists. Nothing about deploying a `CLAUDE.md` later in the build retroactively updates the orchestrator's context.
+- **Subagents spawned after Stage 5 SHOULD pick up the new `CLAUDE.md`** — their fresh context assembly at spawn time runs after the file exists. This is standard behavior for fresh Claude Code sessions. Almost certainly works for regular agents. **For plugin-shipped subagents specifically, this is unverified** — given the Finding 6 research surfacing Issues #13605 (plugin subagents don't get their MCP tools) and #13627 (plugin subagent body content may be silently dropped), it's plausible that plugin subagent context assembly is also reduced. Worth an empirical test.
+
+**The architectural consequence:** the atomic-commands rule cannot live solely in the project `CLAUDE.md` template. That file doesn't exist until Stage 5, can't be retroactively loaded by the orchestrator, and may or may not be picked up by plugin subagents. Relying on it as the single source of truth leaves Stages 0-4 ungoverned and creates uncertainty for Stages 7-11 specialists.
+
+**The belt-and-suspenders approach we settled on (Option E+):**
+
+1. **Inline the rule in the orchestrator's own `agent.md` body** — two references to "external CLAUDE.md" replaced with inline imperatives. The orchestrator's body is loaded at its session start, so it always has the rule regardless of what files exist in the target repo. Works from Stage 0 onwards.
+
+2. **Inline the rule in every specialist agent's own `agent.md` body** — a short "Bash commands must be atomic" section added to each of the 8 specialists (`data-explorer`, `business-analyst`, `dbt-architecture-setup`, `dbt-staging-builder`, `dbt-dimension-builder`, `dbt-fact-builder`, `dbt-test-writer`, `dbt-pipeline-validator`). Each specialist reads its own body at spawn time; the body is always loaded regardless of whether the plugin-subagent CLAUDE.md loading path works. Eliminates the Issue #13627 / plugin-subagent uncertainty entirely.
+
+3. **Update the project `CLAUDE.md` template** — add the atomic-commands rule to the template that architecture-setup deploys at Stage 5, plus a plugin intro explaining the 3-part agent namespace, the `${CLAUDE_PLUGIN_ROOT}` convention, the "locked by plugin" UI label, and the correct invocation command. This benefits post-build work: any future Claude Code session the user runs inside the generated project after the build completes will have the rule loaded via standard CLAUDE.md discovery. It also *might* benefit Stage 7-11 specialists if plugin subagent CLAUDE.md loading works correctly, but that's a bonus, not a dependency.
+
+4. **Update the global user `~/.claude/CLAUDE.md`** with a tightened version of the same rule so it applies across every Claude Code session the user runs, regardless of which plugin or project they're working in.
+
+**Why this is overkill AND correct:**
+
+Yes, the rule is duplicated across ~12 files (1 global CLAUDE.md, 1 project CLAUDE.md template, 1 orchestrator body, 8 specialist bodies, 1 plugin CLAUDE.md Lessons Learned entry, plus this Finding). That's a lot of places to keep in sync. But each duplication serves a different audience that reads a different file:
+
+| Audience | Reads | Why the rule needs to be there |
+|---|---|---|
+| Orchestrator LLM during build | Its own `agent.md` body | Governs Stages 0-4 before any CLAUDE.md exists in the target repo |
+| Specialist LLMs during build | Their own `agent.md` body | Governs Stages 7-11 regardless of whether plugin subagent CLAUDE.md loading works |
+| Post-build Claude Code in target repo | Project `CLAUDE.md` deployed at Stage 5 | Governs ongoing maintenance of the generated project |
+| Any Claude Code session on the user's machine | Global `~/.claude/CLAUDE.md` | Cross-project rule for every session the user runs |
+| Contributors to this plugin's source | Plugin's own `CLAUDE.md` Lessons Learned | Explains the historical context and rationale for contributors |
+| Readers of the conference talk | This Finding 9 | The long-form narrative and empirical evidence |
+
+Every audience has its own file, and each needs the rule in the file it reads. The duplication cost (~60 lines total across all files, maybe 1,200 tokens of persistent overhead) is cheap compared to the cost of any one audience missing the rule. And the rule itself is short and stable — once written correctly, it rarely needs updating.
+
+### Takeaway for the talk (updated)
+
+The atomic-commands refinement is worth a dedicated talk slide because it captures a general principle about working with Claude Code's permission model:
+
+> **Match the tool's grain, don't fight it.** Claude Code's permission layer, hook system, and `acceptEdits` mode are all designed around the assumption that each Bash tool call is a single atomic operation. The moment you introduce compound shell expressions, every layer has to do extra work to figure out what you meant — and the odds that at least one layer gets it slightly wrong go up. The cost of matching the tool's grain is small (a few percent more tokens); the cost of fighting it is silent failures in background contexts.
+>
+> **The principle generalizes beyond Claude Code.** Any time you're integrating with a permission system, an audit log, a rule engine, or a task queue, single-operation atoms are the grain the system is designed around. Compound operations require the system to parse your intent, and parsing intent is where bugs live. This is true for database transactions, for Kubernetes admission controllers, for CI/CD pipelines, and for LLM agent tool calls.
+
+### Open follow-ups
+
+- **Empirical verification on the next fresh-install run.** Confirm the hook fires, confirm the allow decision takes effect, confirm the profiler produces JSON files in `1 - Documentation/data-profiles/`. If not, we need a different approach.
+- **Extend the allowlist if we find commands we missed.** The current allowlist was built from the orchestrator's documented stages, but the specialist agents may run additional commands (like `dbt debug` inside `dbt-architecture-setup`) that I haven't inventoried. First run on a fresh install may turn up gaps.
+- **Consider adding a `permissionDecisionReason` that mentions the specific command family** (python-script / dbt / git / filesystem) so users reading the plugin's hook output can understand why a call was auto-approved.
+- **Audit the script for false positives.** The regex patterns use `.fullmatch` with liberal `.*` — worth reviewing whether any pattern could unintentionally match a command outside the plugin's scope (e.g., `python /etc/shadow_reader.py` because we accept `python .*scripts.*\.py`). The current patterns require the path to contain `/skills/<name>/scripts/<file>.py`, which is tight enough that external scripts shouldn't match, but an adversarial filename test is worth running.
+
+---
+
+## Finding 10 — Development vs installed behavior diverges
+
+A theme across all nine preceding findings: **the plugin behaves differently when you're developing it vs. when it's installed from a marketplace**. During dev you can point Claude Code at the plugin directory with `--plugin-dir ./`, or drop the agents into `.claude/agents/`, and everything works under bare names with full `permissionMode` support. Install the same plugin on a fresh machine via the marketplace and half of your assumptions silently break.
 
 Specific divergences I hit:
 

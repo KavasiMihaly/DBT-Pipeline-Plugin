@@ -125,7 +125,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --selec
 ```
 
 **Setup**:
-1. Save production state: `dbt run && dbt docs generate`
+1. Save production state — run `dbt run` and then `dbt docs generate` as two separate commands (atomic-only rule)
 2. Store artifacts (manifest.json) in cloud storage (S3, GCS, Azure Blob)
 3. In CI, download production state and compare against current branch
 4. Only run models that have changed
@@ -146,8 +146,14 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select
 
 ### Run models and test them
 
+Issue these as two separate atomic Bash calls — the plugin forbids compound shell expressions (see the Bash command rules in this SKILL.md and in the repo's CLAUDE.md):
+
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select my_model && python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select my_model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select my_model
+```
+
+```bash
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select my_model
 ```
 
 ### Compile and show compiled SQL
