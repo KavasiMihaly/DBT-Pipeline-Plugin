@@ -23,25 +23,63 @@ Environment variables (set by plugin userConfig or manually):
 import os
 
 
-def _load_plugin_userconfig_env():
-    """Map CLAUDE_PLUGIN_OPTION_<KEY> -> <KEY> for SQL connection env vars.
+_CONFIG_KEYS = (
+    'SQL_SERVER', 'SQL_DATABASE', 'SQL_AUTH_TYPE', 'SQL_USER', 'SQL_PASSWORD',
+    'SQL_ENCRYPT', 'SQL_TRUST_CERT', 'SQL_DRIVER',
+    'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET',
+)
 
-    Claude Code plugin subprocesses receive userConfig values as
-    CLAUDE_PLUGIN_OPTION_<KEY> environment variables, but this module expects
-    bare names (e.g. SQL_SERVER). Copy the prefixed variants to the bare names
-    when the bare name is not already set, so the script behaves identically
-    whether launched as a plugin subprocess or as a standalone command.
+
+def _load_from_settings_json(missing_keys):
+    """Read plugin config from .claude/settings.local.json as last resort.
+
+    The configure.py script writes connection settings here. This fallback
+    ensures scripts work even when CLAUDE_PLUGIN_OPTION_* env vars are not
+    passed (e.g., flaky env propagation on Windows bash).
     """
-    keys = (
-        'SQL_SERVER', 'SQL_DATABASE', 'SQL_AUTH_TYPE', 'SQL_USER', 'SQL_PASSWORD',
-        'SQL_ENCRYPT', 'SQL_TRUST_CERT', 'SQL_DRIVER',
-        'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET',
-    )
-    for key in keys:
+    from pathlib import Path
+    import json
+    try:
+        cwd = Path.cwd()
+        for search_dir in [cwd] + list(cwd.parents)[:5]:
+            settings_path = search_dir / '.claude' / 'settings.local.json'
+            if settings_path.exists():
+                with open(settings_path, 'r') as f:
+                    settings = json.load(f)
+                options = (settings.get('pluginConfigs', {})
+                           .get('dbt-pipeline-toolkit', {})
+                           .get('options', {}))
+                for key in missing_keys:
+                    config_key = key.lower()  # SQL_SERVER -> sql_server
+                    value = options.get(config_key, '')
+                    if value and not os.environ.get(key):
+                        os.environ[key] = value
+                return
+    except Exception:
+        pass
+
+
+def _load_plugin_userconfig_env():
+    """Populate SQL_* env vars from all available config sources.
+
+    Precedence (first wins):
+      1. Bare env vars already set (SQL_SERVER, SQL_DATABASE, etc.)
+      2. CLAUDE_PLUGIN_OPTION_* env vars (plugin userConfig)
+      3. .claude/settings.local.json pluginConfigs (written by configure.py)
+
+    Must run at module load time, before any script reads env vars.
+    """
+    # Source 2: CLAUDE_PLUGIN_OPTION_* env vars
+    for key in _CONFIG_KEYS:
         if not os.environ.get(key):
             fallback = os.environ.get(f'CLAUDE_PLUGIN_OPTION_{key}')
             if fallback:
                 os.environ[key] = fallback
+
+    # Source 3: settings.local.json fallback
+    missing = [k for k in _CONFIG_KEYS if not os.environ.get(k)]
+    if missing:
+        _load_from_settings_json(missing)
 
 
 _load_plugin_userconfig_env()

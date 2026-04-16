@@ -22,12 +22,10 @@ from sqlalchemy.engine import URL
 
 
 def _load_plugin_userconfig_env():
-    """Map CLAUDE_PLUGIN_OPTION_<KEY> -> <KEY> for SQL connection env vars.
+    """Populate SQL_* env vars from plugin options and settings.local.json.
 
-    Claude Code plugin subprocesses receive userConfig values as
-    CLAUDE_PLUGIN_OPTION_<KEY> environment variables, but this script expects
-    bare names (e.g. SQL_SERVER). Must run before argparse defaults are
-    evaluated in main(), so it lives at module level.
+    See connect.py for the canonical implementation. This duplicate exists
+    because argparse defaults are evaluated before connect.py is imported.
     """
     keys = (
         'SQL_SERVER', 'SQL_DATABASE', 'SQL_AUTH_TYPE', 'SQL_USER', 'SQL_PASSWORD',
@@ -39,6 +37,29 @@ def _load_plugin_userconfig_env():
             fallback = os.environ.get(f'CLAUDE_PLUGIN_OPTION_{key}')
             if fallback:
                 os.environ[key] = fallback
+
+    # Fallback: read from .claude/settings.local.json (written by configure.py)
+    missing = [k for k in keys if not os.environ.get(k)]
+    if missing:
+        from pathlib import Path
+        import json
+        try:
+            cwd = Path.cwd()
+            for search_dir in [cwd] + list(cwd.parents)[:5]:
+                settings_path = search_dir / '.claude' / 'settings.local.json'
+                if settings_path.exists():
+                    with open(settings_path, 'r') as f:
+                        settings = json.load(f)
+                    options = (settings.get('pluginConfigs', {})
+                               .get('dbt-pipeline-toolkit', {})
+                               .get('options', {}))
+                    for key in missing:
+                        value = options.get(key.lower(), '')
+                        if value and not os.environ.get(key):
+                            os.environ[key] = value
+                    break
+        except Exception:
+            pass
 
 
 _load_plugin_userconfig_env()
@@ -1151,11 +1172,11 @@ Examples:
     source_group.add_argument('--files', help='Glob pattern for multiple CSV files (e.g., "*.csv")')
 
     # SQL Server connection parameters
-    parser.add_argument('--server', default='localhost', help='SQL Server instance')
+    parser.add_argument('--server', default=os.environ.get('SQL_SERVER', 'localhost'), help='SQL Server instance (env: SQL_SERVER)')
     parser.add_argument('--database', default=os.environ.get('SQL_DATABASE', ''), help='Database name (env: DBT_DATABASE)')
     parser.add_argument('--user', default=os.environ.get('SQL_USER', ''), help='SQL Server username (env: SQL_USER, empty=Windows Auth)')
     parser.add_argument('--password', default=os.environ.get('SQL_PASSWORD', ''), help='SQL Server password (env: SQL_PASSWORD, empty=Windows Auth)')
-    parser.add_argument('--driver', default='ODBC Driver 17 for SQL Server', help='ODBC driver')
+    parser.add_argument('--driver', default=os.environ.get('SQL_DRIVER', 'ODBC Driver 17 for SQL Server'), help='ODBC driver (env: SQL_DRIVER)')
 
     # Options
     parser.add_argument('--sample', type=int, help='Sample size for large tables/files')

@@ -21,23 +21,57 @@ from sqlalchemy.engine import URL
 
 
 def _load_plugin_userconfig_env():
-    """Map CLAUDE_PLUGIN_OPTION_<KEY> -> <KEY> for SQL connection env vars.
+    """Populate SQL_* env vars from all available config sources.
 
-    Claude Code plugin subprocesses receive userConfig values as
-    CLAUDE_PLUGIN_OPTION_<KEY> environment variables, but this script expects
-    bare names (e.g. SQL_SERVER). Must run before argparse defaults are
-    evaluated in main(), so it lives at module level.
+    Precedence (first wins):
+      1. Bare env vars already set (SQL_SERVER, SQL_DATABASE, etc.)
+      2. CLAUDE_PLUGIN_OPTION_* env vars (plugin userConfig)
+      3. .claude/settings.local.json pluginConfigs (written by configure.py)
+
+    Must run before argparse defaults are evaluated in main().
     """
     keys = (
         'SQL_SERVER', 'SQL_DATABASE', 'SQL_AUTH_TYPE', 'SQL_USER', 'SQL_PASSWORD',
         'SQL_ENCRYPT', 'SQL_TRUST_CERT', 'SQL_DRIVER',
         'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET',
     )
+
+    # Source 2: CLAUDE_PLUGIN_OPTION_* env vars
     for key in keys:
         if not os.environ.get(key):
             fallback = os.environ.get(f'CLAUDE_PLUGIN_OPTION_{key}')
             if fallback:
                 os.environ[key] = fallback
+
+    # Source 3: .claude/settings.local.json (written by configure.py)
+    # Only read if we still have missing values
+    missing = [k for k in keys if not os.environ.get(k)]
+    if missing:
+        _load_from_settings_json(missing)
+
+
+def _load_from_settings_json(missing_keys):
+    """Read plugin config from .claude/settings.local.json as last resort."""
+    from pathlib import Path
+    try:
+        cwd = Path.cwd()
+        for search_dir in [cwd] + list(cwd.parents)[:5]:
+            settings_path = search_dir / '.claude' / 'settings.local.json'
+            if settings_path.exists():
+                import json
+                with open(settings_path, 'r') as f:
+                    settings = json.load(f)
+                options = (settings.get('pluginConfigs', {})
+                           .get('dbt-pipeline-toolkit', {})
+                           .get('options', {}))
+                for key in missing_keys:
+                    config_key = key.lower()  # SQL_SERVER -> sql_server
+                    value = options.get(config_key, '')
+                    if value and not os.environ.get(key):
+                        os.environ[key] = value
+                return
+    except Exception:
+        pass
 
 
 _load_plugin_userconfig_env()
@@ -483,12 +517,12 @@ def main():
         description='Load CSV files into SQL Server with fast bulk insert'
     )
     
-    # Connection parameters
-    parser.add_argument('--server', default='localhost', help='SQL Server hostname')
-    parser.add_argument('--database', default=os.environ.get('SQL_DATABASE', ''), help='Database name (env: DBT_DATABASE)')
+    # Connection parameters — defaults read from env vars (populated by _load_plugin_userconfig_env)
+    parser.add_argument('--server', default=os.environ.get('SQL_SERVER', 'localhost'), help='SQL Server hostname (env: SQL_SERVER)')
+    parser.add_argument('--database', default=os.environ.get('SQL_DATABASE', ''), help='Database name (env: SQL_DATABASE)')
     parser.add_argument('--username', default=os.environ.get('SQL_USER', ''), help='SQL Server username (env: SQL_USER, empty=Windows Auth)')
     parser.add_argument('--password', default=os.environ.get('SQL_PASSWORD', ''), help='SQL Server password (env: SQL_PASSWORD, empty=Windows Auth)')
-    parser.add_argument('--driver', default='ODBC Driver 17 for SQL Server', help='ODBC driver')
+    parser.add_argument('--driver', default=os.environ.get('SQL_DRIVER', 'ODBC Driver 17 for SQL Server'), help='ODBC driver (env: SQL_DRIVER)')
     parser.add_argument('--timeout', type=int, default=30, help='Connection timeout (seconds)')
     parser.add_argument('--source-dir', help='Override source directory path (default: auto-detect)')
     
