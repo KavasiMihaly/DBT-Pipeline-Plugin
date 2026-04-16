@@ -174,17 +174,126 @@ class DataProfiler:
             except:
                 pass
 
-            # Try to convert to datetime
+            # Try to convert to datetime with format detection
+            # Many date formats exist (DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD, etc.)
+            # Strategy: sample raw values to detect the separator and field order,
+            # then try both dayfirst=True and dayfirst=False and pick whichever
+            # converts more values. If equal, use the format detected from sampling.
             try:
-                converted = pd.to_datetime(df[col], errors='coerce')
-                # If most values converted successfully, use datetime type
-                if converted.notna().sum() / len(df) > 0.9:
-                    df[col] = converted
+                # Sample non-null string values to detect raw format
+                raw_sample = df[col].dropna().astype(str).head(100)
+                detected_format = self._detect_date_format(raw_sample)
+
+                # Try both interpretations
+                converted_default = pd.to_datetime(df[col], errors='coerce', dayfirst=False)
+                converted_dayfirst = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+                default_hits = int(converted_default.notna().sum())
+                dayfirst_hits = int(converted_dayfirst.notna().sum())
+
+                best_hits = max(default_hits, dayfirst_hits)
+                if best_hits / len(df) > 0.9:
+                    # Choose the interpretation that converts more values
+                    # If equal, prefer dayfirst when format suggests DD/MM
+                    use_dayfirst = (dayfirst_hits > default_hits) or (
+                        dayfirst_hits == default_hits and
+                        detected_format.get('day_first_likely', False)
+                    )
+                    if use_dayfirst:
+                        df[col] = converted_dayfirst
+                    else:
+                        df[col] = converted_default
+
+                    # Store format metadata for downstream consumers
+                    if not hasattr(df, '_date_format_hints'):
+                        df._date_format_hints = {}
+                    df._date_format_hints[col] = {
+                        'dayfirst': use_dayfirst,
+                        'detected_pattern': detected_format.get('pattern', 'unknown'),
+                        'sample_value': detected_format.get('sample', ''),
+                        'ambiguous': detected_format.get('ambiguous', False),
+                    }
                     continue
             except:
                 pass
 
         return df
+
+    def _sanitize_column_name(self, name: str) -> str:
+        """Sanitize column name the same way sql-executor's load_data.py does.
+
+        This must stay in sync with load_data.py:sanitize_column_name() so that
+        the profiler predicts the correct database column names after CSV loading.
+        """
+        name = str(name)
+        replacements = {
+            ' ': '_', '-': '_', '(': '', ')': '', '[': '', ']': '',
+            '{': '', '}': '', '/': '_', '\\': '_', '.': '_', ',': '',
+            '&': 'and', '%': 'pct', '#': 'num', '@': 'at', '$': 'dollar',
+            '+': 'plus', '=': 'eq', '*': '', '?': '', '!': '', "'": '',
+            '"': '', ':': '_', ';': '_', '<': 'lt', '>': 'gt',
+        }
+        for old, new in replacements.items():
+            name = name.replace(old, new)
+        name = re.sub(r'[^a-zA-Z0-9_]', '', name)
+        name = re.sub(r'_+', '_', name)
+        name = name.strip('_')
+        if not name:
+            name = 'column'
+        if name[0].isdigit():
+            name = '_' + name
+        return name.lower()
+
+    def _detect_date_format(self, sample: pd.Series) -> Dict[str, Any]:
+        """Detect the date format from a sample of raw string values.
+
+        Returns a dict with:
+          - pattern: human-readable format like 'DD/MM/YYYY', 'YYYY-MM-DD', etc.
+          - day_first_likely: True if the first numeric field exceeds 12 (must be day)
+          - ambiguous: True if all sampled values have first field <= 12 (could be month or day)
+          - sample: a representative value from the data
+        """
+        result = {'pattern': 'unknown', 'day_first_likely': False, 'ambiguous': True, 'sample': ''}
+
+        if len(sample) == 0:
+            return result
+
+        result['sample'] = str(sample.iloc[0])
+
+        # Common date patterns to check
+        patterns = [
+            (r'^\d{4}[-/]\d{1,2}[-/]\d{1,2}', 'YYYY-MM-DD'),    # ISO
+            (r'^\d{1,2}/\d{1,2}/\d{4}', 'D/M/YYYY'),             # Slash-separated
+            (r'^\d{1,2}-\d{1,2}-\d{4}', 'D-M-YYYY'),             # Dash-separated
+            (r'^\d{1,2}\.\d{1,2}\.\d{4}', 'D.M.YYYY'),           # Dot-separated
+            (r'^\d{1,2}/\d{1,2}/\d{2}$', 'D/M/YY'),              # 2-digit year
+            (r'^\d{8}$', 'YYYYMMDD'),                              # Compact
+        ]
+
+        for regex, pattern_name in patterns:
+            match_count = sample.str.match(regex, na=False).sum()
+            if match_count / len(sample) > 0.8:
+                result['pattern'] = pattern_name
+
+                # For non-ISO formats, check if first field > 12 to disambiguate
+                if pattern_name.startswith('D'):
+                    first_fields = sample.str.extract(r'^(\d{1,2})', expand=False).dropna()
+                    first_nums = pd.to_numeric(first_fields, errors='coerce').dropna()
+                    if len(first_nums) > 0:
+                        max_first = int(first_nums.max())
+                        if max_first > 12:
+                            result['day_first_likely'] = True
+                            result['ambiguous'] = False
+                            result['pattern'] = pattern_name.replace('D/', 'DD/').replace('D-', 'DD-').replace('D.', 'DD.')
+                        else:
+                            # All first fields <= 12 — genuinely ambiguous
+                            result['ambiguous'] = True
+                elif pattern_name.startswith('YYYY'):
+                    result['day_first_likely'] = False
+                    result['ambiguous'] = False
+
+                break
+
+        return result
 
     def _map_pandas_to_sql_type(self, dtype) -> str:
         """Map pandas dtype to SQL Server data type."""
@@ -348,6 +457,11 @@ class DataProfiler:
             if len(non_null_data) > 0:
                 profile['min_value'] = str(non_null_data.min())
                 profile['max_value'] = str(non_null_data.max())
+                # Include detected date format metadata if available
+                if hasattr(self.csv_data, '_date_format_hints'):
+                    fmt_info = self.csv_data._date_format_hints.get(column_name)
+                    if fmt_info:
+                        profile['date_format'] = fmt_info
 
         # Get top 5 most common values if low cardinality
         if distinct_count <= 10 and distinct_count > 0:
@@ -821,6 +935,17 @@ class DataProfiler:
             table_name, profiles, pk_candidates, quality_issues
         )
 
+        # Build column name mapping (original CSV → sanitized database names)
+        # Replicates the sanitization logic from sql-executor's load_data.py
+        # so downstream agents know both the original and actual column names
+        column_name_mapping = {}
+        if self.source_type == 'csv':
+            for col_profile in profiles:
+                original = col_profile['column_name']
+                sanitized = self._sanitize_column_name(original)
+                if original != sanitized:
+                    column_name_mapping[original] = sanitized
+
         # Build complete profile
         table_profile = {
             'table_name': table_name,
@@ -829,6 +954,7 @@ class DataProfiler:
             'primary_key_candidates': pk_candidates,
             'profile_date': datetime.now().isoformat(),
             'columns': profiles,
+            'column_name_mapping': column_name_mapping,
             'quality_issues': quality_issues,
             'recommendations': recommendations
         }

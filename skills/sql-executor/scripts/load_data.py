@@ -174,23 +174,38 @@ class SQLExecutor:
         self.engine = None
         
         # Set up source data directory
-        # Try to find project root by looking for common project markers
-        script_path = Path(__file__).resolve()
-        current_path = script_path.parent
-
-        # Walk up to find a directory with "2 - Source Files" subdirectory
+        # Primary: use CWD (Claude Code sets CWD to the user's project)
+        # Fallback: walk up from script location (for direct invocation during dev)
+        cwd = Path.cwd()
         project_root = None
-        for _ in range(10):  # Limit search depth
-            if (current_path / '2 - Source Files').exists():
-                project_root = current_path
-                break
-            if current_path.parent == current_path:  # Reached root
-                break
-            current_path = current_path.parent
 
-        # If not found, try default path relative to script
+        if (cwd / '2 - Source Files').exists():
+            project_root = cwd
+        else:
+            # Walk up from CWD looking for the folder
+            current_path = cwd
+            for _ in range(5):
+                if current_path.parent == current_path:
+                    break
+                current_path = current_path.parent
+                if (current_path / '2 - Source Files').exists():
+                    project_root = current_path
+                    break
+
+        # Last resort: walk up from script location (dev-only fallback)
         if project_root is None:
-            project_root = script_path.parent.parent.parent.parent.parent
+            script_path = Path(__file__).resolve()
+            current_path = script_path.parent
+            for _ in range(10):
+                if (current_path / '2 - Source Files').exists():
+                    project_root = current_path
+                    break
+                if current_path.parent == current_path:
+                    break
+                current_path = current_path.parent
+
+        if project_root is None:
+            project_root = cwd
 
         self.source_dir = project_root / '2 - Source Files'
 

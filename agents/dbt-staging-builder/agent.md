@@ -322,7 +322,15 @@ If a profile already exists for your source table, read it instead of re-profili
 cat "1 - Documentation/data-profiles/profile_tablename_TIMESTAMP.json"
 ```
 
-### Step 3: Create Source YAML
+### Step 3: Create Source YAML (read-before-write)
+
+**ALWAYS check if the YAML file already exists before writing:**
+```bash
+ls "models/staging/<source>/_stg_<source>__<entity>__schema.yml"
+```
+
+If the file exists, **read it first** and merge your additions rather than overwriting. This prevents duplicate `sources:` blocks that cause dbt compilation errors.
+
 Define source in `models/staging/<source>/_stg_<source>__<entity>__schema.yml` (one file per model) with:
 - Source connection details (schema: `raw` for sql-executor loads)
 - Table description
@@ -359,6 +367,35 @@ python scripts/query_sql_server.py --query "SELECT COUNT(*) FROM stg_source__ent
 python scripts/query_sql_server.py --query "SELECT TOP 10 * FROM stg_source__entity"
 ```
 
+## CRITICAL: Bracket-Quote All Column References on SQL Server
+
+SQL Server has many reserved words that conflict with common column names. **Always wrap column references in square brackets** in staging model SQL to avoid cryptic compilation errors:
+
+```sql
+-- WRONG — will fail if any column is a reserved word
+select
+    date,
+    type,
+    status,
+    name
+from source
+
+-- CORRECT — always bracket-quote
+select
+    [date] as event_date,
+    [type] as record_type,
+    [status] as record_status,
+    [name] as entity_name
+from source
+```
+
+**Common reserved words that appear as column names:**
+`date`, `type`, `status`, `name`, `key`, `value`, `index`, `order`, `group`, `level`, `state`, `year`, `month`, `day`, `time`, `number`, `percent`, `code`, `label`, `class`, `zone`, `range`, `source`, `result`, `action`, `position`, `reference`, `description`, `role`, `user`, `system`, `check`, `primary`, `unique`, `identity`, `column`, `table`, `schema`
+
+**Rule: When in doubt, bracket-quote.** The cost of unnecessary brackets is zero. The cost of missing a reserved word is a failed build and debugging time.
+
+In the `renamed` CTE, always rename reserved words to descriptive names (e.g., `[date]` → `event_date`, `[type]` → `record_type`).
+
 ## Common Patterns
 
 For detailed SQL examples of common staging patterns, see `Agents/reference/examples/staging-models.md`:
@@ -370,26 +407,74 @@ For detailed SQL examples of common staging patterns, see `Agents/reference/exam
 
 ## Materialization
 
-Staging models should be materialized as **views** (default):
+Staging models **MUST** be materialized as **tables** on SQL Server:
 ```yaml
 models:
   - name: stg_source__entity
     description: Staging layer
     config:
-      materialized: view  # Default, can omit
+      materialized: table
 ```
 
-**Why views?**
-- No storage cost
-- Always fresh data
-- Fast compilation
-- Used by downstream models
+**Why tables (not views) on SQL Server?**
+- The `dbt-sqlserver` adapter wraps `CREATE VIEW` in `EXEC(N'...')`, which breaks any double-quoted strings inside the SQL body (including `{{ source() }}` refs). This is a known adapter behavior — **not a dbt bug**.
+- `materialized: table` uses `CREATE TABLE ... AS SELECT` which has no EXEC wrapper and no quoting issues.
+- The small storage cost is worth avoiding hours of debugging cryptic quoting errors.
+- Downstream models (dims, facts) query the table the same way they'd query a view.
+
+**NEVER use `materialized: view`** for staging models targeting SQL Server unless you have verified that the specific model contains no double-quoted strings or special characters in its source references.
+
+## CRITICAL: Referential Integrity Validation
+
+**After building staging models, ALWAYS check referential integrity between related tables.** Foreign key columns in one staging model must have 100% match against the primary key column in the referenced staging model. Orphan records cause silent data loss in downstream joins.
+
+### Validation Workflow
+
+For every foreign key column in a staging model, run a referential integrity check:
+
+```bash
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT COUNT(*) as orphan_count FROM <schema>.stg_<source>__<child_entity> c LEFT JOIN <schema>.stg_<source>__<parent_entity> p ON c.<fk_column> = p.<pk_column> WHERE p.<pk_column> IS NULL AND c.<fk_column> IS NOT NULL"
+```
+
+**Expected result: 0 orphan records.** If orphans exist:
+
+1. **Investigate the source data** — are the orphans legitimate (data quality issue in source) or a bug in the staging model (wrong join key, wrong table)?
+2. **Document the finding** in the completion summary with the orphan count and percentage
+3. **If orphans are source data quality issues**, add a dbt test to track them:
+   ```yaml
+   - name: fk_column
+     tests:
+       - relationships:
+           to: ref('stg_source__parent_entity')
+           field: pk_column
+           config:
+             severity: warn  # warn if orphans exist, don't block the build
+   ```
+4. **If 100% match is required**, filter out orphan records in the staging model:
+   ```sql
+   where fk_column in (select pk_column from {{ ref('stg_source__parent_entity') }})
+   ```
+
+### When to Run
+
+- **After building each staging model** that contains foreign key columns
+- **After all staging models in a source are built** — run a cross-model integrity sweep
+- **Before declaring the staging layer complete** — the orchestrator should verify all FK relationships
+
+### Common Referential Integrity Issues
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| Orphan FKs in child table | Parent records not loaded or filtered out | Check source data completeness |
+| Type mismatch in join | FK cast as varchar, PK as int | Align type casting in both staging models |
+| Null FKs treated as orphans | LEFT JOIN counts NULLs as non-matches | Add `AND c.fk_column IS NOT NULL` to orphan check |
+| Case-sensitive mismatches | String FKs with mixed case | Apply LOWER() or consistent casing in both models |
 
 ## Testing Requirements
 
 Minimum tests for staging models:
 - **Primary key**: unique, not_null
-- **Foreign keys**: not_null (relationships tested at mart layer)
+- **Foreign keys**: not_null, relationships test (see referential integrity section above)
 - **Categorical columns**: accepted_values
 - **Critical attributes**: not_null (if business requires)
 
@@ -400,12 +485,14 @@ See `Agents/reference/testing-patterns.md` for comprehensive testing guidance.
 Your staging model is complete when:
 - ✅ Source YAML defined with tests
 - ✅ Staging model SQL created with CTE pattern
+- ✅ All column references bracket-quoted `[column_name]`
 - ✅ All columns explicitly cast
 - ✅ Null handling implemented where needed
 - ✅ Primary key filtered (WHERE pk IS NOT NULL)
 - ✅ Model compiles without errors
 - ✅ Model runs successfully
 - ✅ All tests pass
+- ✅ Referential integrity validated (0 orphan FKs)
 - ✅ Data validated with sample queries
 
 ## Completion Summary

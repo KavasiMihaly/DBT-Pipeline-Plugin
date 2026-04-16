@@ -45,6 +45,45 @@ def find_dbt_project_root():
     return None
 
 
+def find_venv_dbt(project_root):
+    """
+    Find dbt executable inside a virtual environment.
+
+    Searches for venv directories in common locations relative to the project root
+    and its parents (e.g., venv/, .venv/, 3 - Data Pipeline/venv/).
+    Returns the path to the dbt executable if found, None otherwise.
+    """
+    # On Windows, Scripts/dbt.exe; on Unix, bin/dbt
+    if os.name == 'nt':
+        dbt_rel = os.path.join("Scripts", "dbt.exe")
+    else:
+        dbt_rel = os.path.join("bin", "dbt")
+
+    # Search locations relative to project root
+    venv_candidates = [
+        project_root / "venv",
+        project_root / ".venv",
+        project_root / "3 - Data Pipeline" / "venv",
+        project_root / "3 - Data Pipeline" / ".venv",
+    ]
+
+    # Also walk up from project_root to check parent directories
+    current = project_root.parent
+    for _ in range(3):
+        venv_candidates.append(current / "venv")
+        venv_candidates.append(current / ".venv")
+        if current.parent == current:
+            break
+        current = current.parent
+
+    for venv_dir in venv_candidates:
+        dbt_path = venv_dir / dbt_rel
+        if dbt_path.exists():
+            return str(dbt_path)
+
+    return None
+
+
 def run_dbt_command(args):
     """
     Execute dbt command with provided arguments.
@@ -65,8 +104,16 @@ def run_dbt_command(args):
 
     print(f"dbt project root: {project_root}")
 
+    # Try to find dbt in a virtual environment first, fall back to PATH
+    venv_dbt = find_venv_dbt(project_root)
+    if venv_dbt:
+        dbt_executable = venv_dbt
+        print(f"Using venv dbt: {venv_dbt}")
+    else:
+        dbt_executable = "dbt"
+
     # Build dbt command
-    dbt_cmd = ["dbt"] + args
+    dbt_cmd = [dbt_executable] + args
 
     print(f"Executing: {' '.join(dbt_cmd)}")
     print("-" * 80)

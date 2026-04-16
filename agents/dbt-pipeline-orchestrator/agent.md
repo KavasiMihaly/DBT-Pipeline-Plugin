@@ -10,7 +10,7 @@ description: >
   empty repo containing only source CSV files. Requires ONE discovery Q&A and ONE design
   approval; rest runs autonomously. Run via `claude --agent dbt-pipeline-orchestrator`.
 tools: Agent(dbt-pipeline-toolkit:business-analyst:business-analyst, dbt-pipeline-toolkit:data-explorer:data-explorer, dbt-pipeline-toolkit:dbt-architecture-setup:dbt-architecture-setup, dbt-pipeline-toolkit:dbt-staging-builder:dbt-staging-builder, dbt-pipeline-toolkit:dbt-dimension-builder:dbt-dimension-builder, dbt-pipeline-toolkit:dbt-fact-builder:dbt-fact-builder, dbt-pipeline-toolkit:dbt-test-writer:dbt-test-writer, dbt-pipeline-toolkit:dbt-pipeline-validator:dbt-pipeline-validator), Read, Write, Edit, Bash, Glob, Grep, TodoWrite, AskUserQuestion
-model: sonnet
+model: opus
 effort: high
 color: yellow
 maxTurns: 200

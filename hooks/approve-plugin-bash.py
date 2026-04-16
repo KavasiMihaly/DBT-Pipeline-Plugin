@@ -79,11 +79,10 @@ Contract
 Input on stdin: PreToolUse JSON per the Claude Code hooks reference, including
 `tool_name`, `tool_input.command`, `permission_mode`, etc.
 
-Output on stdout: JSON with `hookSpecificOutput.permissionDecision` set to
-`"allow"` when all subcommands match the allowlist, or an empty object when any
-subcommand does not match (falls through to default permission flow). Exit code
-0 always. Never exit 2 — that would block the tool call unconditionally, which
-is never the intent here.
+Output on stdout: JSON with `"decision": "approve"` when all subcommands match
+the allowlist, or an empty object `{}` when any subcommand does not match (falls
+through to default permission flow). Exit code 0 always. Never exit 2 — that
+would block the tool call unconditionally, which is never the intent here.
 """
 
 from __future__ import annotations
@@ -333,13 +332,7 @@ def _is_allowlisted(command: str) -> bool:
 
 
 def _emit_allow(reason: str) -> None:
-    payload = {
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "allow",
-            "permissionDecisionReason": reason,
-        }
-    }
+    payload = {"decision": "approve", "reason": reason}
     json.dump(payload, sys.stdout)
     sys.stdout.write("\n")
 
@@ -352,35 +345,33 @@ def _emit_defer() -> None:
 def main() -> int:
     try:
         raw = sys.stdin.read()
-    except (OSError, IOError):
-        _emit_defer()
-        return 0
 
-    if not raw.strip():
-        _emit_defer()
-        return 0
+        if not raw.strip():
+            _emit_defer()
+            return 0
 
-    try:
         payload = json.loads(raw)
-    except json.JSONDecodeError:
-        _emit_defer()
-        return 0
 
-    if payload.get("tool_name") != "Bash":
-        _emit_defer()
-        return 0
+        if payload.get("tool_name") != "Bash":
+            _emit_defer()
+            return 0
 
-    command = payload.get("tool_input", {}).get("command", "")
-    if not command:
-        _emit_defer()
-        return 0
+        command = payload.get("tool_input", {}).get("command", "")
+        if not command:
+            _emit_defer()
+            return 0
 
-    if _is_allowlisted(command):
-        _emit_allow(
-            "Auto-approved by dbt-pipeline-toolkit plugin — all subcommands "
-            "match the plugin-internal allowlist (see hooks/approve-plugin-bash.py)."
-        )
-    else:
+        if _is_allowlisted(command):
+            _emit_allow(
+                "Auto-approved by dbt-pipeline-toolkit plugin — all subcommands "
+                "match the plugin-internal allowlist (see hooks/approve-plugin-bash.py)."
+            )
+        else:
+            _emit_defer()
+
+    except Exception:
+        # Never crash — always defer to default permission flow on unexpected errors.
+        # A crash (non-zero exit) is treated as a hook error by Claude Code.
         _emit_defer()
 
     return 0

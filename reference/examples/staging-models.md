@@ -286,7 +286,7 @@ Staging models should be **views** (default):
 models:
   my_project:
     staging:
-      +materialized: view
+      +materialized: table  # REQUIRED on SQL Server — views break due to EXEC() quoting in dbt-sqlserver adapter
 ```
 
 ### Testing

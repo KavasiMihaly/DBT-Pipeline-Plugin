@@ -73,7 +73,13 @@ class SQLServerReader:
         self.engine = None
         
         # Set up export directory
-        project_root = Path(__file__).parent.parent.parent.parent.parent
+        # Primary: use CWD (Claude Code sets CWD to the user's project)
+        # Fallback: walk up from script location (dev-only)
+        cwd = Path.cwd()
+        if (cwd / '7 - Data Exports').exists():
+            project_root = cwd
+        else:
+            project_root = cwd  # Use CWD anyway; mkdir below creates the folder
         self.export_dir = project_root / '7 - Data Exports'
         self.export_dir.mkdir(exist_ok=True)
         

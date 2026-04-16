@@ -334,6 +334,56 @@ Before this refactor, `hooks/approve-plugin-bash.py` needed ~60 lines of quote-a
 - **Never reintroduce shell-level conditionals or pipelines** to "save a tool call." The token savings are small; the reliability cost of losing background-subagent compatibility is catastrophic.
 - **Also applies to SKILL.md documentation code blocks** — users will copy-paste examples from SKILL.md. Ship atomic examples so users don't learn patterns that will break in automation.
 
+### 2026-04-16 — Python scripts must use CWD (not `__file__`) to find the user's project root
+
+**Change:** Rewrote the project-root discovery logic in `skills/sql-executor/scripts/load_data.py` and `skills/sql-server-reader/scripts/query_sql_server.py`. Both scripts now check `Path.cwd()` first for project folders (`2 - Source Files/`, `7 - Data Exports/`), then walk up from CWD, and only fall back to `Path(__file__)`-based resolution as a last resort for local dev.
+
+**Reason:** When installed as a plugin, `__file__` resolves to `~/.claude/plugins/cache/<id>/skills/<name>/scripts/<file>.py`. Walking up from that path will never find the user's project directory — it finds the plugin cache root, which has no `2 - Source Files/` folder. The error message was: `[WARNING] Source directory not found at C:\Users\kavas\.claude\plugins\cache\OneDayBI-Marketplace\dbt-pipeline-toolkit\2 - Source Files`. Claude Code sets the Bash CWD to the user's project directory, so `Path.cwd()` is the correct primary source for project root.
+
+**Important distinction:** `Path(__file__)` is still correct for finding **files within the skill's own directory structure** (templates, sibling scripts). The fix only applies to finding **user project directories** like `2 - Source Files/` and `7 - Data Exports/`.
+
+**How to avoid regression:**
+- **Any new script that needs to find user project folders** (numbered folders, `dbt_project.yml`, etc.) must use `Path.cwd()` as the primary discovery path.
+- **Never use `Path(__file__)` to find user project content.** Reserve it for locating files that ship with the plugin (templates, config, sibling scripts).
+- **The `--source-dir` CLI argument** remains as an explicit override for both patterns — always honor it when provided.
+
+### 2026-04-16 — PreToolUse hook output format must use `{"decision": "approve"}`, not nested `hookSpecificOutput`
+
+**Change:** Fixed `hooks/approve-plugin-bash.py` to output `{"decision": "approve", "reason": "..."}` instead of `{"hookSpecificOutput": {"permissionDecision": "allow", ...}}`. Also added a top-level `try/except` so the hook never crashes with a traceback.
+
+**Reason:** The hook fired on every Bash call but Claude Code didn't recognize the nested `hookSpecificOutput` format. It treated the unrecognized JSON as an error, causing the hook to effectively fail on every invocation. The correct format was already visible in the same repo's other hook (`validate-dbt-structure.py`), which uses `{"decision": "approve"}` / `{"decision": "block", "reason": "..."}` and works correctly.
+
+**Root cause:** The hook was written based on an incorrect or outdated reference. The `hookSpecificOutput.permissionDecision` format may be from an older Claude Code version or from a different hook type — it does not apply to PreToolUse hooks.
+
+**How to avoid regression:**
+- **All PreToolUse hooks must output `{"decision": "approve|block|skip", "reason": "..."}` at the top level.** Not nested under `hookSpecificOutput`.
+- **Empty JSON `{}` = no opinion** (defer to default permission flow). This is the correct fallback for unrecognized commands.
+- **Never let a hook crash.** A non-zero exit code is treated as a hook error. Wrap the entire `main()` in a try/except that emits `{}` on any unexpected exception.
+- **Always cross-reference with working hooks in the same repo** before shipping a new hook format.
+
+### 2026-04-16 — Compile-one-then-scale: verify before building at scale
+
+**Lesson from Road Safety (STATS19) pipeline build:** The staging builder was asked to create 19 staging models in one pass. Multiple issues (reserved words, date format misdetection, EXEC() quoting, duplicate sources.yml) weren't caught until the full build failed — costing hours of debugging across all 19 models instead of catching the problems on the first one.
+
+**Rule: always build ONE model first, compile it, run it, and verify end-to-end before scaling to the remaining models.** The orchestrator's staging stage should enforce this:
+
+1. Build the first staging model (pick the simplest source table)
+2. `dbt compile --select stg_first_model` — catches SQL syntax, reserved words, missing columns
+3. `dbt run --select stg_first_model` — catches EXEC() quoting issues, materialization problems
+4. `dbt test --select stg_first_model` — catches data quality surprises
+5. Only after all 4 steps pass: proceed to build remaining staging models in parallel
+
+This applies to dimensions and facts too — always prove the pattern works on one model before parallelizing.
+
+**Seven specific issues caught by this retrospective (I-024 through I-030):**
+1. Date format misdetection — profiler now detects format and reports it
+2. Reserved words not bracket-quoted — staging builder now always bracket-quotes
+3. Duplicate sources.yml blocks — staging builder now reads before writing
+4. EXEC() quoting breaks views — staging models now default to `materialized: table`
+5. dbt not found in venv — dbt-runner now auto-discovers venvs
+6. load_data.py needs explicit conn args — filed as enhancement (I-029)
+7. Column sanitization not in profile — profiler now outputs `column_name_mapping`
+
 ### General rule — test on a fresh install, not in dev
 
 Every finding above was invisible during local development (`--plugin-dir` or direct `.claude/agents/` drop) and only surfaced after installing from the marketplace on a second machine. Before shipping any plugin change that touches agent definitions, orchestration, or permission flow:
