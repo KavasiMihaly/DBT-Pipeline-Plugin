@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "mcp__youtube__searchVideos",
-      "mcp__youtube__getTranscripts"
+      "mcp__youtube__getTranscripts",
+      "Bash(curl *)"
     ]
   }
 }

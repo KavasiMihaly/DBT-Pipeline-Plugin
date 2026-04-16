@@ -239,7 +239,7 @@ sources:
         columns:
           - name: primary_key  # Use sanitized column name from database
             description: Primary key
-            tests:
+            data_tests:
               - unique
               - not_null
 
@@ -249,7 +249,7 @@ models:
     columns:
       - name: entity_id
         description: Primary key
-        tests:
+        data_tests:
           - unique
           - not_null
 ```
@@ -443,7 +443,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.
 3. **If orphans are source data quality issues**, add a dbt test to track them:
    ```yaml
    - name: fk_column
-     tests:
+     data_tests:
        - relationships:
            to: ref('stg_source__parent_entity')
            field: pk_column

@@ -31,7 +31,7 @@ models:
   - name: model_name
     columns:
       - name: primary_key_column
-        tests:
+        data_tests:
           - unique
           - not_null
 ```
@@ -41,7 +41,7 @@ models:
 ```yaml
 models:
   - name: fct_sales
-    tests:
+    data_tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns:
             - order_id
@@ -57,7 +57,7 @@ models:
   - name: fct_sales
     columns:
       - name: customer_key
-        tests:
+        data_tests:
           - not_null
           - relationships:
               to: ref('dim_customer')
@@ -73,7 +73,7 @@ models:
   - name: stg_source__entity
     columns:
       - name: entity_id
-        tests:
+        data_tests:
           - unique
           - not_null
 ```
@@ -91,7 +91,7 @@ models:
   - name: int_subject__transformation
     columns:
       - name: composite_key
-        tests:
+        data_tests:
           - unique
           - not_null
 ```
@@ -106,19 +106,19 @@ models:
   - name: fct_subject
     columns:
       - name: fact_key
-        tests:
+        data_tests:
           - unique
           - not_null
 
       - name: foreign_key
-        tests:
+        data_tests:
           - not_null
           - relationships:
               to: ref('dim_entity')
               field: entity_key
 
       - name: measure_column
-        tests:
+        data_tests:
           - not_null
 ```
 
@@ -134,12 +134,12 @@ models:
   - name: dim_entity
     columns:
       - name: entity_key
-        tests:
+        data_tests:
           - unique
           - not_null
 
       - name: natural_key
-        tests:
+        data_tests:
           - unique
           - not_null
 ```
@@ -543,7 +543,7 @@ models:
   - name: stg_source__entity
     columns:
       - name: entity_id
-        tests:
+        data_tests:
           - unique
           - not_null
 
@@ -565,12 +565,12 @@ models:
   - name: int_subject__verb
     columns:
       - name: composite_key
-        tests:
+        data_tests:
           - unique
           - not_null
 
       - name: foreign_key
-        tests:
+        data_tests:
           - relationships:
               to: ref('upstream_model')
               field: key_column
@@ -587,24 +587,24 @@ models:
         enforced: true
     columns:
       - name: fact_key
-        tests:
+        data_tests:
           - unique
           - not_null
 
       - name: foreign_key
-        tests:
+        data_tests:
           - not_null
           - relationships:
               to: ref('dim_entity')
               field: entity_key
 
       - name: measure
-        tests:
+        data_tests:
           - not_null
           - dbt_utils.expression_is_true:
               expression: ">= 0"
 
-    tests:
+    data_tests:
       - dbt_utils.recency:
           datepart: day
           field: transaction_date
@@ -622,17 +622,17 @@ models:
         enforced: true
     columns:
       - name: entity_key
-        tests:
+        data_tests:
           - unique
           - not_null
 
       - name: natural_key
-        tests:
+        data_tests:
           - unique
           - not_null
 
       - name: categorical_field
-        tests:
+        data_tests:
           - accepted_values:
               values: ['value1', 'value2', 'value3']
 ```
@@ -681,14 +681,14 @@ models:
   - name: fct_sales
     columns:
       - name: sales_key
-        tests:
+        data_tests:
           - unique:
               severity: error  # Fail build
           - not_null:
               severity: error
 
       - name: discount_amount
-        tests:
+        data_tests:
           - dbt_utils.expression_is_true:
               expression: ">= 0"
               severity: warn  # Don't fail, just warn
@@ -721,7 +721,7 @@ models:
     columns:
       - name: sales_amount
         description: Total sales amount (quantity * unit_price)
-        tests:
+        data_tests:
           - not_null:
               meta:
                 test_description: "Sales must have an amount"
@@ -739,7 +739,7 @@ models:
   - name: fct_large_table
     columns:
       - name: expensive_column
-        tests:
+        data_tests:
           - unique:
               where: "order_date >= dateadd(day, -30, getdate())"
 ```
@@ -748,7 +748,7 @@ models:
 ```yaml
 models:
   - name: fct_sales
-    tests:
+    data_tests:
       - dbt_utils.recency:
           datepart: day
           field: order_date

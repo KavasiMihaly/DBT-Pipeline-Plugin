@@ -276,18 +276,18 @@ models:
     columns:
       - name: casualty_reference
         description: "Primary key for casualties"
-        tests:
+        data_tests:
           - unique
           - not_null
 
       - name: email
         description: "Customer email address"
-        tests:
+        data_tests:
           - not_null
 
       - name: status
         description: "Customer account status"
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               values: ['Active', 'Inactive', 'Pending']
@@ -543,11 +543,11 @@ models:
   - name: stg_source__customers
     columns:
       - name: customer_id
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: email
-        tests:
+        data_tests:
           - not_null
 ```
 

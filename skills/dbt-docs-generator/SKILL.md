@@ -161,7 +161,7 @@ models:
     columns:
       - name: sales_key
         description: Surrogate primary key for sales transactions
-        tests:
+        data_tests:
           - unique
           - not_null
 ```

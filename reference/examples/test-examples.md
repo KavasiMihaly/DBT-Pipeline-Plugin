@@ -21,7 +21,7 @@ models:
     columns:
       - name: sales_key
         description: Surrogate key for sales transactions
-        tests:
+        data_tests:
           - unique
           - not_null
 ```
@@ -41,7 +41,7 @@ models:
     columns:
       - name: customer_key
         description: Foreign key to dim_customer
-        tests:
+        data_tests:
           - not_null
           - relationships:
               to: ref('dim_customer')
@@ -50,7 +50,7 @@ models:
 
       - name: product_key
         description: Foreign key to dim_product
-        tests:
+        data_tests:
           - not_null
           - relationships:
               to: ref('dim_product')
@@ -72,13 +72,13 @@ models:
     columns:
       - name: order_status
         description: Current status of the order
-        tests:
+        data_tests:
           - accepted_values:
               values: ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'refunded']
               severity: error
 
       - name: payment_method
-        tests:
+        data_tests:
           - accepted_values:
               values: ['credit_card', 'debit_card', 'paypal', 'wire_transfer', 'cash']
 ```
@@ -98,16 +98,16 @@ models:
     columns:
       - name: sales_amount
         description: Total sales amount (quantity * unit_price)
-        tests:
+        data_tests:
           - not_null
 
       - name: order_date
         description: Date of the order
-        tests:
+        data_tests:
           - not_null
 
       - name: quantity
-        tests:
+        data_tests:
           - not_null
 ```
 
@@ -126,7 +126,7 @@ models:
   - name: stg_source__entity
     columns:
       - name: primary_key
-        tests:
+        data_tests:
           - unique
           - not_null
 
@@ -135,19 +135,19 @@ models:
   - name: fct_subject
     columns:
       - name: fact_key
-        tests:
+        data_tests:
           - unique
           - not_null
 
       - name: foreign_key
-        tests:
+        data_tests:
           - not_null
           - relationships:
               to: ref('dim_entity')
               field: entity_key
 
       - name: measure
-        tests:
+        data_tests:
           - not_null
 
 # Dimensions
@@ -155,12 +155,12 @@ models:
   - name: dim_entity
     columns:
       - name: entity_key
-        tests:
+        data_tests:
           - unique
           - not_null
 
       - name: natural_key
-        tests:
+        data_tests:
           - unique
           - not_null
 ```
@@ -246,11 +246,11 @@ models:
   - name: fct_conversion_rates
     columns:
       - name: conversion_rate
-        tests:
+        data_tests:
           - is_percentage
 
       - name: bounce_rate
-        tests:
+        data_tests:
           - is_percentage
 ```
 
@@ -275,7 +275,7 @@ models:
   - name: stg_api__events
     columns:
       - name: event_timestamp
-        tests:
+        data_tests:
           - is_recent:
               days_ago: 7
 ```
@@ -307,7 +307,7 @@ from duplicates
 ```yaml
 models:
   - name: fct_sales
-    tests:
+    data_tests:
       - no_duplicates_where:
           column_name: order_id
           where_clause: "order_status = 'completed'"
@@ -324,12 +324,12 @@ models:
   - name: fct_revenue
     columns:
       - name: revenue_date
-        tests:
+        data_tests:
           - dbt_utils.expression_is_true:
               expression: ">= '2020-01-01'"
 
       - name: revenue_amount
-        tests:
+        data_tests:
           - dbt_utils.expression_is_true:
               expression: "> 0"
 ```
@@ -656,12 +656,12 @@ models:
 # Staging Models
 models:
   - name: stg_source__entity
-    tests: [unique: primary_key, not_null: primary_key]
+    data_tests: [unique: primary_key, not_null: primary_key]
 
 # Fact Tables
 models:
   - name: fct_subject
-    tests:
+    data_tests:
       - unique: fact_key
       - not_null: fact_key
       - relationships: all foreign keys
@@ -671,7 +671,7 @@ models:
 # Dimensions
 models:
   - name: dim_entity
-    tests:
+    data_tests:
       - unique: entity_key, natural_key
       - not_null: entity_key, natural_key
       - accepted_values: categorical columns
@@ -688,19 +688,19 @@ models:
   - name: fct_sales
     columns:
       - name: sales_key
-        tests:
+        data_tests:
           - unique:
               severity: error  # Fail build
 
       - name: customer_key
-        tests:
+        data_tests:
           - relationships:
               to: ref('dim_customer')
               field: customer_key
               severity: error
 
       - name: discount_amount
-        tests:
+        data_tests:
           - dbt_utils.expression_is_true:
               expression: ">= 0"
               severity: warn  # Don't fail build, just warn
@@ -713,7 +713,7 @@ models:
 ```yaml
 models:
   - name: fct_sales
-    tests:
+    data_tests:
       - relationships:
           to: ref('dim_customer')
           field: customer_key
@@ -740,7 +740,7 @@ models:
     columns:
       - name: sales_amount
         description: Total sales amount (quantity * unit_price)
-        tests:
+        data_tests:
           - not_null:
               meta:
                 test_description: "Ensures all sales transactions have an amount"
@@ -827,7 +827,7 @@ sources:
 ```yaml
 models:
   - name: fct_sales
-    tests:
+    data_tests:
       - dbt_utils.recency:
           datepart: day
           field: order_date
@@ -839,7 +839,7 @@ models:
 ```yaml
 models:
   - name: fct_revenue
-    tests:
+    data_tests:
       - dbt_utils.equality:
           compare_model: ref('fct_revenue_v1')
 ```

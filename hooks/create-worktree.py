@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import uuid
 
 
 def run_git(args, cwd):
@@ -21,7 +22,9 @@ def run_git(args, cwd):
 
 def main():
     data = json.load(sys.stdin)
-    worktree_id = data.get("worktree_id", "wt-unknown")
+    # Generate a unique worktree ID if none provided — prevents collisions
+    # when multiple agents spawn worktrees in parallel
+    worktree_id = data.get("worktree_id") or f"wt-{uuid.uuid4().hex[:8]}"
     base_branch = data.get("base_branch", "main")
     cwd = data.get("cwd", os.getcwd())
 

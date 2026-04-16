@@ -62,13 +62,13 @@ sources:
         columns:
           - name: customer_id
             description: Primary key
-            tests:
+            data_tests:
               - unique
               - not_null
 
           - name: email
             description: Customer email address
-            tests:
+            data_tests:
               - not_null
 
 models:
@@ -77,12 +77,12 @@ models:
     columns:
       - name: customer_id
         description: Primary key
-        tests:
+        data_tests:
           - unique
           - not_null
 
       - name: email
-        tests:
+        data_tests:
           - not_null
 ```
 

@@ -61,22 +61,69 @@ Write tests that:
 - Achieve 80% test coverage
 - Prevent data quality issues in production
 
+## Modern dbt Test Syntax (dbt v1.8+)
+
+**IMPORTANT:** dbt v1.8+ distinguishes between data tests and unit tests. Use the correct YAML keys and CLI selectors.
+
+### YAML Keys
+- **`data_tests:`** — generic and singular data tests (replaces the old `tests:` key)
+- **`unit_tests:`** — unit tests with mocked inputs (native in dbt v1.8+, no package needed)
+
+The old `tests:` key still works as an alias but `data_tests:` is the modern standard. Always use `data_tests:` in new code.
+
+### CLI Selectors — `test_type:`
+
+```bash
+# Run ALL tests
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test
+
+# Data tests only (generic + singular)
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select test_type:data
+
+# Unit tests only
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select test_type:unit
+
+# Generic data tests only (YAML-defined)
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select test_type:generic
+
+# Singular data tests only (standalone SQL files)
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select test_type:singular
+
+# Tests for a specific model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select stg_source__entity
+
+# Unit tests for a specific model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select "stg_source__entity,test_type:unit"
+
+# Data tests for a specific model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select "stg_source__entity,test_type:data"
+```
+
+### dbt build (recommended for CI)
+
+`dbt build` runs resources in lineage order: **unit tests → materialize model → data tests**. This is the recommended way to validate models end-to-end:
+
+```bash
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" build --select stg_source__entity
+```
+
 ## 4-Level Testing Framework
 
-**Level 1: Generic Tests** (Built-in, YAML-based)
+**Level 1: Generic Data Tests** (YAML-based, `data_tests:` key)
 - Foundation tests: unique, not_null, relationships, accepted_values
-- Applied via YAML configuration
+- Applied via YAML configuration in schema files
 - Minimum required for all models
 
-**Level 2: Custom Tests** (SQL-based)
-- Singular tests: One-off tests for specific models
-- Custom generic tests: Reusable test macros
+**Level 2: Custom Data Tests** (SQL-based)
+- Singular tests: One-off tests for specific models (in `tests/` folder)
+- Custom generic tests: Reusable test macros (in `macros/tests/`)
 - Business rule validation
 
-**Level 3: Unit Tests** (Isolated testing)
+**Level 3: Unit Tests** (Native dbt v1.8+, `unit_tests:` key)
 - Test individual models with mocked upstream data
 - Validate transformation logic in isolation
-- Requires dbt_unit_testing package
+- **Native in dbt v1.8+ — no external package needed**
+- Defined in YAML alongside models
 
 **Level 4: Data Contracts** (Schema enforcement)
 - Enforce column types, constraints, and nullability
@@ -93,7 +140,7 @@ models:
   - name: stg_source__entity
     columns:
       - name: entity_id
-        tests:
+        data_tests:
           - unique
           - not_null
 ```
@@ -104,17 +151,17 @@ models:
   - name: fct_sales
     columns:
       - name: sales_key
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: customer_key
-        tests:
+        data_tests:
           - not_null
           - relationships:
               to: ref('dim_customer')
               field: customer_key
       - name: product_key
-        tests:
+        data_tests:
           - not_null
           - relationships:
               to: ref('dim_product')
@@ -127,14 +174,14 @@ models:
   - name: dim_customer
     columns:
       - name: customer_key
-        tests:
+        data_tests:
           - unique
           - not_null
       - name: customer_id
-        tests:
+        data_tests:
           - unique
       - name: customer_status
-        tests:
+        data_tests:
           - accepted_values:
               values: ['Active', 'Inactive', 'Pending']
 ```
@@ -171,15 +218,36 @@ where {{ column_name }} > current_date
 **Usage**:
 ```yaml
 - name: order_date
-  tests:
+  data_tests:
     - date_not_future
 ```
 
 ## Level 3: Unit Tests
 
-For complex transformation logic, test models in isolation with mocked data.
+Native in dbt v1.8+. Define unit tests in YAML using the `unit_tests:` key — no external package needed.
 
-See `Agents/reference/examples/test-examples.md` for complete unit test examples using dbt_unit_testing package.
+```yaml
+unit_tests:
+  - name: test_stg_orders_status_mapping
+    description: "Verify status codes are mapped correctly"
+    model: stg_source__orders
+    given:
+      - input: ref('raw_orders')
+        rows:
+          - {order_id: 1, status: "P"}
+          - {order_id: 2, status: "C"}
+          - {order_id: 3, status: "X"}
+    expect:
+      rows:
+        - {order_id: 1, order_status: "Pending"}
+        - {order_id: 2, order_status: "Complete"}
+        - {order_id: 3, order_status: "Cancelled"}
+```
+
+Run unit tests only:
+```bash
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select test_type:unit
+```
 
 ## Level 4: Data Contracts
 
@@ -213,7 +281,7 @@ Determine what to test:
 - Data types (contracts)
 
 ### Step 2: Write Tests in YAML
-Add tests to model schema file:
+Add data tests to model schema file using `data_tests:` key:
 ```yaml
 version: 2
 
@@ -223,17 +291,23 @@ models:
     columns:
       - name: column_name
         description: Column description
-        tests:
+        data_tests:
           - test_name
 ```
 
 ### Step 3: Run Tests
 ```bash
-# Test specific model
-python scripts/run_dbt.py test --select model_name
+# Test specific model (all test types)
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select model_name
 
-# Test entire project
-python scripts/run_dbt.py test
+# Data tests only for a model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select "model_name,test_type:data"
+
+# Unit tests only for a model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select "model_name,test_type:unit"
+
+# All tests in project
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test
 
 # Test specific layer
 python scripts/run_dbt.py test --select staging.*
