@@ -8,7 +8,7 @@ description: >
   or ad-hoc queries (use sql-server-reader). Runs in background, no user interaction.
 tools: Read, Bash, Grep, Glob
 model: haiku
-memory: user
+memory: project
 skills: dbt-pipeline-toolkit:data-profiler
 color: cyan
 background: true
