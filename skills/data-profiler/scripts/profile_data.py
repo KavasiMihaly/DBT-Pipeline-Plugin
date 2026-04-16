@@ -89,20 +89,20 @@ class DataProfiler:
         self.engine = None
         self.csv_data = None  # For CSV profiling
 
-        # Set up export directory - use current working directory as project root
-        # Look for project markers (CLAUDE.md, dbt_project.yml, or standard folders)
+        # Set up export directory - always write to 1 - Documentation/data-profiles/
+        # relative to the project root. Create the full path if it doesn't exist.
         cwd = Path.cwd()
         project_root = cwd
 
-        # Walk up to find project root with documentation folder
-        for _ in range(5):
-            if (project_root / '1 - Documentation').exists() or (project_root / 'CLAUDE.md').exists():
+        # Walk up to find project root (has CLAUDE.md, dbt_project.yml, .git, or numbered folders)
+        for search_dir in [cwd] + list(cwd.parents)[:5]:
+            if any((search_dir / marker).exists() for marker in [
+                '1 - Documentation', 'CLAUDE.md', 'dbt_project.yml', '.git', '2 - Source Files'
+            ]):
+                project_root = search_dir
                 break
-            if project_root.parent == project_root:
-                break
-            project_root = project_root.parent
 
-        # Default export to 1 - Documentation/data-profiles/ as per documentation
+        # Always use this fixed path — create it if Stage 5 hasn't run yet
         self.export_dir = project_root / '1 - Documentation' / 'data-profiles'
         self.export_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1099,13 +1099,17 @@ class DataProfiler:
         if output_filename:
             output_file = self.export_dir / output_filename
         else:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            # Replace dots in schema-qualified names for safe filenames
-            safe_name = profile['table_name'].replace('.', '__')
+            # Normalize table name for consistent filenames across parallel agents:
+            # - Extract just the stem (no path, no extension)
+            # - Replace dots, spaces, hyphens with underscores
+            # - Lowercase
+            raw_name = profile['table_name']
+            safe_name = Path(raw_name).stem if '/' in raw_name or '\\' in raw_name else raw_name
+            safe_name = safe_name.replace('.', '__').replace(' ', '_').replace('-', '_').lower()
             if format == 'json':
-                output_file = self.export_dir / f"profile_{safe_name}_{timestamp}.json"
+                output_file = self.export_dir / f"profile_{safe_name}.json"
             else:
-                output_file = self.export_dir / f"profile_{safe_name}_{timestamp}.csv"
+                output_file = self.export_dir / f"profile_{safe_name}.csv"
 
         if format == 'json':
             with open(output_file, 'w') as f:

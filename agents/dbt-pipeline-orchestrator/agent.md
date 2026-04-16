@@ -162,7 +162,7 @@ Read the exit code:
 ```
 Task(
   subagent_type: "dbt-pipeline-toolkit:data-explorer:data-explorer",
-  prompt: "Profile every CSV file in {source_files_origin} by explicitly running the data-profiler script for each file: `python \"${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py\" --file \"<csv-path>\" --format json`. The script writes JSON profile files to `1 - Documentation/data-profiles/profile_<table>_<timestamp>.json`. This path is auto-approved by the plugin's PreToolUse hook, so Bash calls to this script work in background mode. After all CSVs are profiled, return the pipeline orchestration JSON envelope with profiled_tables, source_inventory, relationship_map, and quality_issues.",
+  prompt: "Profile every CSV file in {source_files_origin} by explicitly running the data-profiler script for each file: `python \"${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py\" --file \"<csv-path>\" --format json`. The script writes JSON profile files to `1 - Documentation/data-profiles/profile_<name>.json` (no timestamp — consistent filenames). This path is auto-approved by the plugin's PreToolUse hook, so Bash calls to this script work in background mode. After all CSVs are profiled, return the pipeline orchestration JSON envelope with profiled_tables, source_inventory, relationship_map, and quality_issues.",
   run_in_background: true,
   mode: "acceptEdits"
 )
