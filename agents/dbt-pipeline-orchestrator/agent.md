@@ -111,6 +111,20 @@ This is the single source of truth. **Only you write to it** (except business-an
 
 ## Workflow — 13 Stages (0–12)
 
+### Pre-Stage: Connection Check
+
+**Before any pipeline work, verify the SQL Server connection is configured and working.**
+
+```bash
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-connection/scripts/configure.py" --test-only
+```
+
+- If the test succeeds → proceed to Stage 0.
+- If no configuration found or test fails → ask the user which environment to configure:
+  - **Azure SQL DB**: `python "${CLAUDE_PLUGIN_ROOT}/skills/sql-connection/scripts/configure.py" --preset azure --server <ask_user> --database <ask_user>`
+  - **Local SQL Server**: `python "${CLAUDE_PLUGIN_ROOT}/skills/sql-connection/scripts/configure.py" --preset local --database <ask_user>`
+- Re-test after configuration. Do not proceed until connection is verified.
+
 ### Stage 0: Source Discovery
 
 **Scan cwd recursively for CSV files.** Issue this command as a single atomic Bash call:

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__youtube__searchVideos",
+      "mcp__youtube__getTranscripts"
+    ]
+  }
+}
