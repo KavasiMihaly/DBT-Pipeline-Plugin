@@ -151,34 +151,61 @@ Read the exit code:
 
 **Atomic commands only.** Do NOT combine these checks into a compound `&&`/`||` expression. Every Bash tool call in this pipeline must be a single atomic operation — no `&&`, `||`, `;`, `|`, subshells `(...)`, command substitution `$(...)`, backticks, or redirects like `2>/dev/null`. If you need conditional or sequential logic, issue multiple Bash tool calls and read each command's output in LLM text before deciding the next step. This is required because compound commands break the plugin's PreToolUse allowlist hook and silently stall background subagents — the permission layer evaluates rules per-subcommand and compound expressions fall through to interactive prompts that background workers cannot answer.
 
-### Stage 1: Discovery Q&A (USER TOUCH POINT 1)
+### Stage 1: Source Profiling
 
-Spawn `dbt-pipeline-toolkit:business-analyst:business-analyst` in **foreground** (interactive):
+**Profile sources BEFORE asking the user questions.** This gives the business analyst rich context (column stats, data types, cardinality, date formats, PK candidates) to present source-relevant options in the discovery questions.
 
-```
-Task(
-  subagent_type: "dbt-pipeline-toolkit:business-analyst:business-analyst",
-  prompt: "Pipeline goals discovery. Ask the 5 standard pipeline questions PLUS the target SQL Server database name. Write Section 1 of 1 - Documentation/pipeline-design.md (create file if needed). The database name is required — do not assume a default.",
-  // NO run_in_background — foreground so the analyst can prompt the user
-)
-```
+**Parallel profiling with agent teams.** When there are multiple source CSV files, spawn one `data-explorer` agent per file to profile them in parallel. This dramatically reduces profiling time for large source sets.
 
-Wait for completion. Read Section 1 of pipeline-design.md to verify it was written.
-
-### Stage 2: Source Profiling
-
-Spawn `dbt-pipeline-toolkit:data-explorer:data-explorer` in **background**:
+**Single source file (or ≤3 files):** spawn one agent to profile all files sequentially:
 
 ```
 Task(
   subagent_type: "dbt-pipeline-toolkit:data-explorer:data-explorer",
   prompt: "Profile every CSV file in {source_files_origin} by explicitly running the data-profiler script for each file: `python \"${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py\" --file \"<csv-path>\" --format json`. The script writes JSON profile files to `1 - Documentation/data-profiles/profile_<table>_<timestamp>.json`. This path is auto-approved by the plugin's PreToolUse hook, so Bash calls to this script work in background mode. After all CSVs are profiled, return the pipeline orchestration JSON envelope with profiled_tables, source_inventory, relationship_map, and quality_issues.",
   run_in_background: true,
-  mode: "acceptEdits"   // file writes enabled; Bash for plugin scripts is auto-approved by the PreToolUse hook in plugin.json
+  mode: "acceptEdits"
 )
 ```
 
-Wait for completion. Parse JSON envelope. Write Sections 2 and 3 of pipeline-design.md using the returned data.
+**Multiple source files (>3 files):** spawn one `data-explorer` agent per file in parallel. Issue all Task calls in a single message so they run concurrently:
+
+```
+// One Task per CSV file — all launched in the same message for parallel execution
+Task(
+  name: "profile-{filename1}",
+  subagent_type: "dbt-pipeline-toolkit:data-explorer:data-explorer",
+  prompt: "Profile ONLY this CSV file: `python \"${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py\" --file \"{source_files_origin}/{filename1}.csv\" --format json`. Return the JSON envelope with profiled_tables, source_inventory, and quality_issues for this file only.",
+  run_in_background: true,
+  mode: "acceptEdits"
+)
+Task(
+  name: "profile-{filename2}",
+  subagent_type: "dbt-pipeline-toolkit:data-explorer:data-explorer",
+  prompt: "Profile ONLY this CSV file: ...",
+  run_in_background: true,
+  mode: "acceptEdits"
+)
+// ... repeat for each CSV discovered in Stage 0
+```
+
+Wait for all agents to complete. Collect all profile JSON envelopes. Merge the results into a unified source inventory and relationship map. Write Sections 2 and 3 of pipeline-design.md using the combined data.
+
+### Stage 2: Discovery Q&A (USER TOUCH POINT 1)
+
+**Now that profiles exist, spawn the business analyst to ask informed questions.** The BA reads the profile JSONs and presents source-relevant options to the user.
+
+Spawn `dbt-pipeline-toolkit:business-analyst:business-analyst` in **foreground** (interactive):
+
+```
+Task(
+  subagent_type: "dbt-pipeline-toolkit:business-analyst:business-analyst",
+  prompt: "Pipeline goals discovery. Data profiles are available at 1 - Documentation/data-profiles/. Read ALL profile JSON files first to understand the source data (entities, columns, data types, date columns, numeric columns, cardinality, PK candidates). Then ask the user ALL 5 standard pipeline questions using a single AskUserQuestion call — include source-relevant options derived from the profiles. Do NOT assume or pre-fill any answer. Also ask for the target SQL Server database name. After collecting all answers, write Section 1 of 1 - Documentation/pipeline-design.md (create file if needed).",
+  // NO run_in_background — foreground so the analyst can prompt the user
+)
+```
+
+Wait for completion. Read Section 1 of pipeline-design.md to verify it was written.
 
 ### Stage 3: Draft Proposed Data Model
 
@@ -333,21 +360,35 @@ If `git status` fails, STOP and escalate to the user. Do NOT skip this step or p
 
 ### Stage 6: Load Source Data
 
-**Step 1 — Move CSVs into the designated folder.** The `sql-executor` load script expects source files in `2 - Source Files/`. If CSVs are elsewhere (root, subfolder, `source_files_origin`), move them first:
-
-```bash
-mkdir -p "2 - Source Files"
-# Move all CSVs from source_files_origin into the designated folder
-cp {source_files_origin}/*.csv "2 - Source Files/"
-```
-
-Verify the files landed by issuing an atomic `find` call and counting the output lines in LLM text:
+**Step 1 — Copy CSVs into `2 - Source Files/`.** The `sql-executor` load script expects source files in `2 - Source Files/`. First check if they're already there (Stage 5 architecture-setup may have copied them):
 
 ```bash
 find "2 - Source Files" -name "*.csv" -type f
 ```
 
-Count the number of lines in the output. That count must match the number of sources discovered in Stage 0. If it doesn't, STOP and investigate before proceeding.
+Count the output lines. If the count matches the number of sources discovered in Stage 0, skip to Step 2.
+
+If CSVs are missing from `2 - Source Files/`, copy them from `source_files_origin`:
+
+```bash
+mkdir -p "2 - Source Files"
+```
+
+Then copy:
+
+```bash
+cp "{source_files_origin}/filename.csv" "2 - Source Files/"
+```
+
+**IMPORTANT:** Use `cp` (copy), NOT `mv` (move). The original CSVs must remain in `source_files_origin` so the project can be easily reset and re-run. The `2 - Source Files/` folder is a working copy — the originals stay where the user placed them.
+
+Verify the files landed:
+
+```bash
+find "2 - Source Files" -name "*.csv" -type f
+```
+
+Count the output lines. That count must match the number of sources discovered in Stage 0. If it doesn't, STOP and investigate before proceeding.
 
 Do NOT pipe `ls` into `wc -l` or any other command. Compound shell expressions are forbidden in this pipeline. Atomic commands only — issue `find` as one call, then count the output lines in your own reasoning before proceeding.
 

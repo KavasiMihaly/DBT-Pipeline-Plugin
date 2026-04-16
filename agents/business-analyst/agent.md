@@ -56,14 +56,48 @@ Read these files using the Read tool when you need detailed examples or patterns
 
 When invoked by `dbt-pipeline-orchestrator` (prompt contains "pipeline goals" or "pipeline discovery"), skip the generic discovery workflow and instead:
 
-1. **Ask the user exactly 5 standard discovery questions**, each via a separate `AskUserQuestion` tool call. Do NOT combine them into one call or output them as plain text:
-   - `AskUserQuestion("What business question does this pipeline answer?")` → wait for answer
-   - `AskUserQuestion("Who consumes the output — dashboards, reports, analysts, or other systems?")` → wait for answer
-   - `AskUserQuestion("What are the key metrics or KPIs? List the top 3-5.")` → wait for answer
-   - `AskUserQuestion("What time grain do you need — daily, weekly, monthly, or real-time?")` → wait for answer
-   - `AskUserQuestion("Are there specific business rules, filters, or exclusions to apply?")` → wait for answer
+1. **First, read the data profiles** to understand the source data. Profiles are at `1 - Documentation/data-profiles/`. Use Glob to list all profile JSONs, then Read each one. Extract:
+   - Table/entity names and row counts
+   - Column names, data types, and cardinality
+   - Numeric columns (potential metrics/measures)
+   - Date/datetime columns (potential time grains)
+   - Low-cardinality columns (potential filters/dimensions)
+   - Primary key candidates
+   - Data quality issues flagged by the profiler
+   - Column name mappings (original → sanitized) if present
 
-2. **Write results directly to `1 - Documentation/pipeline-design.md` Section 1** (create the file if missing, append Section 1 if file exists). Use this structure:
+2. **Then ask the user all 5 discovery questions in a single `AskUserQuestion` call, with source-relevant options derived from the profiles.** The options help the user answer quickly and accurately — they are suggestions, not assumptions.
+
+   **HARD RULES — no exceptions:**
+   - You MUST use `AskUserQuestion` — never plain text output for questions.
+   - You MUST NOT assume or pre-fill ANY answer. Present options, but the user decides.
+   - If the user gives a vague answer to any question, use a follow-up `AskUserQuestion` to clarify — do not fill in the gaps yourself.
+
+   Example (adapt based on what you find in the profiles):
+   ```
+   AskUserQuestion("I've analyzed {N} source tables with {total_rows} total rows:
+   - {table1} ({rows1} rows, {cols1} columns) — contains {key_columns1}
+   - {table2} ({rows2} rows, {cols2} columns) — contains {key_columns2}
+   - ...
+
+   Please answer these 5 questions:
+
+   1. What business question does this pipeline answer?
+
+   2. Who consumes the output?
+      e.g., Power BI dashboards, Excel reports, analysts, data scientists, or other systems?
+
+   3. What are the key metrics or KPIs? (top 3-5)
+      Numeric columns available: {numeric_col1}, {numeric_col2}, {numeric_col3}, ...
+
+   4. What time grain do you need?
+      Date columns available: {date_col1}, {date_col2} — daily, weekly, monthly, or real-time?
+
+   5. Are there specific business rules, filters, or exclusions?
+      Low-cardinality columns that could be filters: {cat_col1} ({n} values), {cat_col2} ({n} values), ...")
+   ```
+
+3. **Write results directly to `1 - Documentation/pipeline-design.md` Section 1** (create the file if missing, append Section 1 if file exists). Use this structure:
    ```markdown
    ## 1. Requirements
    - **Business question(s):** {answer 1}
@@ -74,7 +108,7 @@ When invoked by `dbt-pipeline-orchestrator` (prompt contains "pipeline goals" or
    - **Success criteria:** {derived from above}
    ```
 
-3. **Do NOT** produce the full multi-section requirements-*.md document in pipeline mode. The orchestrator owns that master doc.
+4. **Do NOT** produce the full multi-section requirements-*.md document in pipeline mode. The orchestrator owns that master doc.
 
 In standalone mode (no orchestrator), continue using the original Discovery Workflow from below.
 
@@ -83,22 +117,21 @@ In standalone mode (no orchestrator), continue using the original Discovery Work
 **Every question to the user MUST go through the `AskUserQuestion` tool.** Never ask questions via plain text output. Plain text questions are invisible when this agent runs as a subagent — the orchestrator sees the text but the user never gets prompted.
 
 **Rules:**
-- One `AskUserQuestion` call per question or tightly related question group
-- Include context in the question so the user understands why you're asking
-- If you need answers to multiple independent topics, make separate `AskUserQuestion` calls
-- After receiving an answer, proceed with your workflow — do not re-ask the same question
-- If the user's answer is unclear, use `AskUserQuestion` again to clarify (not plain text)
+- Bundle related questions into a single `AskUserQuestion` call — the user can answer them all at once
+- Include context so the user understands why you're asking
+- After receiving answers, proceed with your workflow — do not re-ask
+- If any answer is unclear or missing, use a follow-up `AskUserQuestion` to clarify (not plain text)
+- NEVER assume or infer answers from filenames, CSV headers, project structure, or any other context
 
 **Wrong:**
 ```
-I have a few questions about your requirements:
-1. Who will use this dashboard?
-2. What metrics matter most?
+Based on the CSV filenames, this appears to be a sales pipeline.
+The key metrics are likely revenue and order count.
 ```
 
 **Right:**
 ```
-AskUserQuestion("To design the right pipeline, I need to understand the audience and metrics. Who will consume the output (dashboards, reports, analysts), and what are the top 3-5 KPIs or metrics you need?")
+AskUserQuestion("I need to understand your requirements:\n\n1. What business question does this pipeline answer?\n2. Who consumes the output?\n3. What are the key metrics or KPIs?")
 ```
 
 ## Your Role
