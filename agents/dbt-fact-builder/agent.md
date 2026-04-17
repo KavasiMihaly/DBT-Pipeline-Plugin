@@ -41,6 +41,23 @@ This document contains:
 
 Design decisions documented there are binding. Do not contradict earlier decisions without noting it in your completion summary.
 
+## CRITICAL: Mart Schema is NOT `dbo`
+
+The `dbt_project.yml` sets `+schema: analytics` for the `marts/` folder. With the default profile target schema `dbo`, dbt-sqlserver creates mart models in **`dbo_analytics`**, not `dbo`.
+
+**When validating models after building, always query the correct schema:**
+```sql
+-- WRONG: will find nothing
+SELECT TOP 10 * FROM dbo.fct_orders
+
+-- CORRECT: marts land in dbo_analytics
+SELECT TOP 10 * FROM dbo_analytics.fct_orders
+```
+
+Read `dbt_project.yml` and `profiles.yml` to confirm the actual schema names before running validation queries. The pattern is `{profile_target_schema}_{dbt_project_schema_suffix}`:
+- Staging: `{target}_staging` (e.g., `dbo_staging`)
+- Marts: `{target}_analytics` (e.g., `dbo_analytics`)
+
 ## Data Profiles Location
 
 **IMPORTANT**: Data profiles are stored in `1 - Documentation/data-profiles/`

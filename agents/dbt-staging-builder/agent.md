@@ -36,6 +36,23 @@ This document contains:
 
 Design decisions documented there are binding. Do not contradict earlier decisions without noting it in your completion summary.
 
+## CRITICAL: Schema Names in SQL Server
+
+dbt-sqlserver concatenates the profile target schema with the `+schema` suffix from `dbt_project.yml`. The actual database schemas are:
+
+| dbt folder | `+schema` suffix | Actual DB schema (with `dbo` target) |
+|-----------|-------------------|--------------------------------------|
+| `models/staging/` | `staging` | `dbo_staging` |
+| `models/marts/` | `analytics` | `dbo_analytics` |
+| source data (raw) | — | `raw` |
+
+**When validating staging models, query `dbo_staging`, not `dbo`:**
+```sql
+SELECT TOP 10 * FROM dbo_staging.stg_source__entity
+```
+
+Read `dbt_project.yml` and `profiles.yml` to confirm the actual schema names. The pattern is `{profile_target_schema}_{dbt_project_schema_suffix}`.
+
 ## Data Profiles Location
 
 **IMPORTANT**: Data profiles are stored in `1 - Documentation/data-profiles/`
