@@ -31,6 +31,27 @@ claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orche
 
 You cannot be spawned as a subagent — you must be the main thread to delegate via the `Agent` tool. A subagent cannot spawn other subagents, so if this orchestrator is auto-invoked from an existing Claude session the `Agent(...)` tool is inert and delegation will silently fail. Always launch via `claude --agent` as the main thread.
 
+## HARD RULE: Every Bash tool call is a single atomic command
+
+This rule binds you, the orchestrator, for every Bash tool call you make across all 13 stages — no exceptions, no "just this once."
+
+**Forbidden in every Bash command:**
+- `&&` or `||` (logical chain)
+- `;` (sequential chain)
+- `|` or `|&` (pipe)
+- Backgrounding with `&`
+- Subshells `(...)`
+- Command substitution `` `...` `` or `$(...)`
+- Heredocs (`<<EOF`)
+- Non-essential redirects like `2>/dev/null` or `> /dev/null`
+- `cd <path> && <command>` — this specific anti-pattern has bitten the plugin before (I-041). Use the Bash tool's implicit CWD (already the target repo) or pass an explicit path to the binary (e.g. `git -C <path> ...`).
+
+**Allowed exception:** a literal operator inside a quoted string argument where the shell will not interpret it — e.g. `python foo.py --sql "SELECT a || b FROM t"` is fine (SQL concat, not shell-OR).
+
+**When you need conditional or sequential logic:** issue multiple Bash tool calls, one per step, and read each command's output in your LLM text before choosing the next command. Every branch in this file is already written this way. If you catch yourself wanting to "combine two steps to save a tool call" — stop. The token savings are trivial; the reliability cost is catastrophic (compound commands silently stall background subagents because the PreToolUse allowlist matches per-subcommand and compound expressions fall through to interactive prompts that background workers cannot answer).
+
+If you cannot express a step as a single atomic command, write a Python script in the appropriate `skills/<name>/scripts/` directory and call it as one atomic invocation — do not reach for the shell operators.
+
 ## Prerequisites (Assumed)
 
 The user has:
@@ -323,6 +344,14 @@ Task(
 
 Wait for completion. Verify folders created. Write Section 4 of pipeline-design.md with architecture decisions.
 
+**Post-scaffold connection re-verification.** The architecture-setup skill writes `.claude/settings.local.json`. Historically it overwrote the file and wiped the `pluginConfigs.dbt-pipeline-toolkit.options` block that the Pre-Stage `configure.py` had just written, which caused Stage 6 load scripts to fall back to `localhost` and fail (I-040). The current script merges correctly, but verify defensively — a single atomic call:
+
+```bash
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-connection/scripts/configure.py" --test-only
+```
+
+If the test fails here (but succeeded at Pre-Stage), the merge regressed. STOP, re-run Pre-Stage `configure.py` to restore connection options, then continue. Do NOT proceed to Stage 6 with an untested connection — the load will fail silently on the wrong server.
+
 **MANDATORY: Initialize git repository.** Dimension and fact builders use `isolation: worktree` for parallel execution, which requires a git repo. This is a hard gate — do NOT proceed to Stage 6 until git is confirmed.
 
 Issue each of the following as a **separate atomic Bash call**, reading each command's output before deciding the next. Do NOT chain them with `&&`/`||` or subshells.
@@ -362,6 +391,16 @@ git rev-parse --git-dir
 ```bash
 git init
 ```
+
+**Step 3a — Normalize branch name to `main`.**
+
+Git's `init.defaultBranch` config varies across machines — older installs create `master`, newer ones create `main`. The WorktreeCreate hook and every downstream reference to "base branch" assume `main`. Normalize immediately, as a single atomic call, so the rest of the pipeline never has to branch on master/main:
+
+```bash
+git branch -m main
+```
+
+This renames whatever the initial branch is (usually `master`) to `main`. If the branch is already `main`, the command succeeds silently (git treats rename-to-same-name as a no-op). Do NOT combine this with `git init` via `&&` or any other shell operator — keep them as two separate Bash tool calls. Do NOT try alternatives like `git init -b main`, `git symbolic-ref HEAD refs/heads/main`, `git checkout -b main && ...`, `cd <path> && git branch -m main`, or anything with `&&`/`||`/`;`/`|`. The atomic-commands rule has no exceptions — compound expressions stall background subagents silently and are not allowed in this plugin.
 
 **Step 4 — Stage all files from the initial scaffold:**
 
@@ -549,12 +588,42 @@ Wait for completion. Read Section 10.
 
 ### Stage 12: Handoff Summary
 
-Mark pipeline-design.md Status as "Validated". Append to Section 12:
+**Step 1 — Set pipeline status from Section 10.** Read Section 10 of `pipeline-design.md` (written by the validator at Stage 11). Use its `Overall status` line to set the top-level `Status:` field at the top of the document:
+
+| Section 10 `Overall status` | Top-level `Status:` |
+|---|---|
+| `Validated` | `Validated` |
+| `Build complete, coverage below target` | `Building` (leave user to re-test) |
+| `Build Failed` | `Building` |
+| `No Pipeline Found` | `Draft` |
+
+**Step 2 — Append to Section 12 log:**
+
 ```
 {timestamp}: Pipeline build complete. {N} models, {M} tests passed, {K} rows processed.
 ```
 
-Print final summary to user:
+**Step 3 — Optional Power BI scaffold (ONLY if `Overall status == "Validated"`).**
+
+If — and ONLY if — the validator's Section 10 reported `Overall status: Validated`, run the `pbip-from-dbt` skill to produce an openable Power BI Project skeleton wired to the dbt-built dimensions and facts. This is a scaffolding courtesy — no measures, relationships, or visuals are created; the user opens the `.pbip` in Power BI Desktop and clicks Refresh to discover column metadata.
+
+Issue as a single atomic Bash call. Use the project_name captured at Stage 4 (plan approval) for `--name`. The output folder `4 - Semantic Layer/` was created by Stage 5 scaffolding:
+
+```bash
+python "${CLAUDE_PLUGIN_ROOT}/skills/pbip-from-dbt/scripts/build_pbip.py" --output "4 - Semantic Layer" --name "{project_name}"
+```
+
+Skip this step if:
+- Section 10 status is anything other than `Validated` (no point scaffolding a broken pipeline)
+- The user explicitly declined semantic-layer scaffolding at plan approval time (record the decline in Section 12 for traceability)
+- `4 - Semantic Layer/{project_name}/` already exists (a prior run produced a PBIP). Do NOT pass `--force` from the orchestrator — if the user wants to overwrite, they can re-run the skill manually with `--force`.
+
+On success, the script writes `4 - Semantic Layer/{project_name}/{project_name}.pbip` and its companion `.SemanticModel/` + `.Report/` folders. Capture the path and include it in the final user summary (Step 4).
+
+On failure (exit code non-zero), do NOT abort the pipeline — it's already validated. Record the failure in Section 12 as an INFO-severity note (e.g., `PBIP scaffold failed: {error}. User can re-run manually.`) and continue to Step 4.
+
+**Step 4 — Print final summary to user:**
+
 ```markdown
 # 🎉 Pipeline Build Complete
 
@@ -563,10 +632,17 @@ Print final summary to user:
 **Tests:** {passed}/{total} passed
 **Coverage:** {pct}%
 
-**Validation report:** `1 - Documentation/validation-report-{date}.md`
-**Full design doc:** `1 - Documentation/pipeline-design.md`
+**Design + validation:** `1 - Documentation/pipeline-design.md` (Sections 1-12 — validation results live in Section 10)
 
-**Next step:** Run `claude --agent tmdl-scaffold` to build the Power BI semantic layer.
+{IF PBIP was scaffolded:}
+**Power BI skeleton:** `4 - Semantic Layer/{project_name}/{project_name}.pbip`
+Open in Power BI Desktop (Jan 2025 or later) and click Refresh to discover columns.
+
+{IF PBIP was skipped due to validation status:}
+**Power BI skeleton:** skipped — validation status was `{status}`. Re-run the validator after fixing the pipeline, then re-invoke me, or run the scaffold manually:
+`python "${CLAUDE_PLUGIN_ROOT}/skills/pbip-from-dbt/scripts/build_pbip.py" --output "4 - Semantic Layer" --name "{project_name}"`
+
+**Next step:** Open the `.pbip` in Power BI Desktop to add relationships, measures, and visuals.
 ```
 
 ## Retry Strategy

@@ -124,6 +124,26 @@ class TestCoverageAnalyzer:
         for yaml_file in self.models_dir.rglob("*.yaml"):
             self._parse_schema_file(yaml_file)
 
+    # dbt v1.8+ renamed the `tests:` YAML key to `data_tests:` to disambiguate
+    # from unit tests. The legacy key still works but emits a deprecation warning.
+    # The plugin's test-writer now produces `data_tests:` exclusively; older
+    # projects may still use `tests:`. Accept both so coverage is correct
+    # regardless of which dbt generation the project targets. If a block has
+    # BOTH keys (unusual but legal in transitional files), count entries from
+    # both — dbt also accepts the union.
+    _TEST_KEYS = ('data_tests', 'tests')
+
+    def _collect_tests(self, block: Dict) -> List:
+        """Return the concatenated list of test entries from a YAML block,
+        reading both `data_tests` (dbt >= 1.8) and legacy `tests` keys.
+        """
+        collected: List = []
+        for key in self._TEST_KEYS:
+            value = block.get(key)
+            if isinstance(value, list):
+                collected.extend(value)
+        return collected
+
     def _parse_schema_file(self, yml_file: Path):
         """Parse a schema.yml file to extract tests."""
         try:
@@ -138,19 +158,21 @@ class TestCoverageAnalyzer:
                 if not model_name or model_name not in self.models:
                     continue
 
-                # Check for model-level tests
-                if 'tests' in model:
+                # Model-level tests (either `data_tests:` or legacy `tests:`)
+                model_tests = self._collect_tests(model)
+                if model_tests:
                     self.models[model_name]['has_tests'] = True
-                    for test in model['tests']:
+                    for test in model_tests:
                         test_name = self._get_test_name(test)
                         self.models[model_name]['test_types'].add(test_name)
 
-                # Check for column-level tests
+                # Column-level tests (either `data_tests:` or legacy `tests:`)
                 if 'columns' in model:
                     for column in model['columns']:
-                        if 'tests' in column:
+                        column_tests = self._collect_tests(column)
+                        if column_tests:
                             self.models[model_name]['has_tests'] = True
-                            for test in column['tests']:
+                            for test in column_tests:
                                 test_name = self._get_test_name(test)
                                 self.models[model_name]['test_types'].add(test_name)
 

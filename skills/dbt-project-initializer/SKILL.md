@@ -108,7 +108,7 @@ ProjectName/
 │   ├── seeds/                       # Seed data
 │   ├── snapshots/                   # SCD Type 2 snapshots
 │   └── analyses/                    # Ad-hoc analyses (non-materialized)
-├── 4 - Semantic Layer/              # Power BI TMDL (empty)
+├── 4 - Semantic Layer/              # Power BI TMDL + PBIP output (pbip-from-dbt lands here)
 ├── 5 - Report Building/             # Power BI reports (empty)
 ├── 6 - Data Exports/                # Query results (empty)
 ├── .venv/                           # Python virtual environment

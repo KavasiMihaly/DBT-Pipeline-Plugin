@@ -329,7 +329,7 @@ ProjectName/
 │   ├── seeds/                         # Seed CSVs (dbt seed — optional use)
 │   ├── snapshots/                     # SCD Type 2 snapshots
 │   └── analyses/                      # Ad-hoc analyses (non-materialized)
-├── 4 - Semantic Layer/                # Power BI TMDL
+├── 4 - Semantic Layer/                # Power BI TMDL + PBIP output (pbip-from-dbt lands here)
 ├── 5 - Report Building/               # Power BI reports
 ├── 6 - Data Exports/                  # Query results (sql-server-reader output)
 ├── .venv/                             # Python 3.12 virtual environment

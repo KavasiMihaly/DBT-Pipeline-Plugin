@@ -1,0 +1,72 @@
+# =============================================================================
+# .gitignore for the dbt-pipeline-toolkit plugin repo
+# =============================================================================
+# Plugin content that MUST ship (do not ignore):
+#   - agents/, skills/, hooks/, servers/src/, servers/dist/,
+#     .claude-plugin/plugin.json, reference/
+# Plugin content that MUST NOT ship (ignored below):
+#   - Python bytecode, IDE junk, OS junk, local Claude Code settings,
+#     session logs, test artifacts, node_modules, editor caches.
+# =============================================================================
+
+# --- Python bytecode and caches -------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+.eggs/
+*.egg
+
+# --- Python test / type-check caches --------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# --- Virtual environments -------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# --- Node (for the servers/ MCP build) ------------------------------------
+# servers/dist/ IS shipped — it's the runtime entry point declared in
+# .claude-plugin/plugin.json. node_modules/ is NOT.
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Claude Code local state ---------------------------------------------
+# settings.local.json can contain a user's local SQL connection options
+# under pluginConfigs.dbt-pipeline-toolkit.options — noisy and user-specific.
+.claude/settings.local.json
+
+# Claude Code session transcripts (grow large, user-specific)
+_Agent Logs/
+
+# Claude Code temp files
+tmpclaude-*
+nul
+
+# --- IDE ------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+
+# --- OS -------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Misc local scratch ---------------------------------------------------
+# If contributors use _Research/Printscreens/ or _Test/Printscreens/ per
+# the user's global CLAUDE.md convention, those should ship as-is — they
+# document findings. Don't ignore them.
+# But DO ignore any *.bak file left behind by merge helpers.
+*.bak

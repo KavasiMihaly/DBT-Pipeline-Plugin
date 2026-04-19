@@ -87,8 +87,8 @@ def create_folder_structure(target_path: Path) -> dict:
         "1 - Documentation/data-profiles": "Data profiler JSON outputs",
         "2 - Source Files": "Raw source data and samples",
         "3 - Data Pipeline": "dbt models and transformations",
-        "4 - Semantic Layer": "Power BI semantic models (TMDL)",
-        "5 - Report Building": "Power BI reports and dashboards",
+        "4 - Semantic Layer": "Power BI TMDL + PBIP projects (incl. pbip-from-dbt output)",
+        "5 - Report Building": "Standalone Power BI reports and dashboards",
         "6 - Data Exports": "Query results and validation outputs",
     }
 
@@ -629,8 +629,8 @@ The setup script creates a single virtual environment at the project root (`.ven
 │   ├── dbt_project.yml
 │   ├── profiles.yml               # dbt connection config (git-ignored)
 │   └── profiles.yml.example       # Template for profiles.yml
-├── 4 - Semantic Layer/            # Power BI TMDL files
-├── 5 - Report Building/           # Power BI reports
+├── 4 - Semantic Layer/            # Power BI TMDL + PBIP projects
+├── 5 - Report Building/           # Standalone Power BI reports
 └── 6 - Data Exports/              # Query results
 ```
 
@@ -689,8 +689,8 @@ For issues or questions:
 """
 
 
-def generate_settings_local_json() -> str:
-    """Generate .claude/settings.local.json with minimum safe defaults.
+def default_settings_local() -> dict:
+    """Return the default .claude/settings.local.json structure as a dict.
 
     Focused on what's actually needed during data pipeline builds:
     - All SQL Server MCP read-only tools (metadata discovery is constant)
@@ -701,7 +701,7 @@ def generate_settings_local_json() -> str:
     Bash file operations (cat, ls, grep, etc.) are NOT included because
     Claude Code has dedicated Read/Glob/Grep tools that are always allowed.
     """
-    settings = {
+    return {
         "permissions": {
             "allow": [
                 # Skills - auto-allow all skill executions
@@ -745,7 +745,76 @@ def generate_settings_local_json() -> str:
             ]
         }
     }
-    return json.dumps(settings, indent=2)
+
+
+def merge_settings_local(settings_path: Path) -> dict:
+    """Merge default permissions into any pre-existing settings.local.json.
+
+    The sql-connection skill's `configure.py` writes connection details to
+    `pluginConfigs.dbt-pipeline-toolkit.options` BEFORE the project initializer
+    runs (pre-stage of the orchestrator). The initializer previously overwrote
+    the file unconditionally, wiping those connection options and causing
+    downstream scripts to fall back to `localhost` defaults and fail.
+
+    Contract:
+    - Preserve ALL pre-existing top-level keys (especially `pluginConfigs`).
+    - For `permissions.allow` / `permissions.deny`: take the union with the
+      defaults, preserving insertion order and dropping duplicates.
+    - If the file is present but malformed JSON, back it up alongside and
+      start fresh so we don't silently corrupt user data.
+    """
+    defaults = default_settings_local()
+
+    if not settings_path.exists():
+        return defaults
+
+    try:
+        existing = json.loads(settings_path.read_text(encoding='utf-8'))
+    except (json.JSONDecodeError, OSError) as e:
+        # Don't lose the old file — preserve as .bak and start fresh
+        backup = settings_path.with_suffix(settings_path.suffix + '.bak')
+        try:
+            settings_path.rename(backup)
+            print(f"  Warning: existing settings.local.json was malformed ({e}); "
+                  f"backed up to {backup.name} and generating a fresh one")
+        except OSError:
+            print(f"  Warning: existing settings.local.json was malformed ({e}); "
+                  f"could not back up; generating fresh overwrites the old file")
+        return defaults
+
+    if not isinstance(existing, dict):
+        # Malformed but parseable (e.g., a JSON array) — same policy as above
+        backup = settings_path.with_suffix(settings_path.suffix + '.bak')
+        try:
+            settings_path.rename(backup)
+            print(f"  Warning: existing settings.local.json was not a JSON object; "
+                  f"backed up to {backup.name}")
+        except OSError:
+            pass
+        return defaults
+
+    merged = dict(existing)  # shallow copy of top-level keys
+
+    # Deep-merge ONLY the permissions block; every other top-level key (including
+    # pluginConfigs, env, model, etc.) is preserved as-is from the existing file.
+    merged_permissions = dict(existing.get('permissions') or {})
+    for key in ('allow', 'deny'):
+        default_list = defaults['permissions'].get(key, [])
+        existing_list = merged_permissions.get(key) or []
+        if not isinstance(existing_list, list):
+            existing_list = []
+        # Preserve insertion order, dedupe: existing first, then new defaults
+        seen: set[str] = set()
+        union: list[str] = []
+        for item in list(existing_list) + list(default_list):
+            if isinstance(item, str) and item not in seen:
+                seen.add(item)
+                union.append(item)
+        if union:
+            merged_permissions[key] = union
+    merged['permissions'] = merged_permissions
+
+    return merged
 
 
 def generate_gitignore() -> str:
@@ -1116,11 +1185,27 @@ def main():
     (target_path / "CLAUDE.md").write_text(generate_claude_md(config), encoding='utf-8')
     print("  Created: CLAUDE.md")
 
-    # .claude/settings.local.json
+    # .claude/settings.local.json — MERGE with any pre-existing file. The
+    # sql-connection skill (`configure.py`) may have written connection config
+    # here before this script ran; overwriting would wipe it out and downstream
+    # scripts would fall back to localhost defaults and fail.
     claude_dir = target_path / ".claude"
     claude_dir.mkdir(parents=True, exist_ok=True)
-    (claude_dir / "settings.local.json").write_text(generate_settings_local_json(), encoding='utf-8')
-    print("  Created: .claude/settings.local.json (auto-allows skills and safe bash commands)")
+    settings_path = claude_dir / "settings.local.json"
+    merged_settings = merge_settings_local(settings_path)
+    settings_path.write_text(
+        json.dumps(merged_settings, indent=2), encoding='utf-8'
+    )
+    preserved = bool(
+        isinstance(merged_settings.get('pluginConfigs'), dict)
+        and merged_settings['pluginConfigs']
+    )
+    if preserved:
+        print("  Updated: .claude/settings.local.json "
+              "(merged default permissions, preserved existing pluginConfigs)")
+    else:
+        print("  Created: .claude/settings.local.json "
+              "(default permissions — no pre-existing pluginConfigs to preserve)")
 
     # Step 4: Run setup script (optional)
     if not args.skip_venv and not args.skip_deps:

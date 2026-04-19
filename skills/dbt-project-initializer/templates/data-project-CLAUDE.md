@@ -256,8 +256,8 @@ ls "1 - Documentation/data-profiles/"
 │   │   └── marts/           # dim_* and fct_* models
 │   ├── tests/               # Custom tests
 │   └── dbt_project.yml
-├── 4 - Semantic Layer/      # Power BI TMDL files
-├── 5 - Report Building/     # .pbip report files
+├── 4 - Semantic Layer/      # Power BI TMDL + PBIP projects (incl. pbip-from-dbt output)
+├── 5 - Report Building/     # Standalone Power BI reports / dashboards
 ├── 6 - Data Exports/        # Query results
 ├── .venv/                   # Python virtual environment
 └── CLAUDE.md                # This file

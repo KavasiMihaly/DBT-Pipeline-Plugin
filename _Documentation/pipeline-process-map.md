@@ -103,7 +103,7 @@ User drops CSVs ──▶ Orchestrator ──▶ 13 stages (0-12) ──▶ Vali
 ### Stage 11 — Validate Pipeline
 - **Actor:** `dbt-pipeline-validator`
 - **Action:** `dbt build --full-refresh` end-to-end + final coverage report
-- **Output:** Section 10 (validation results) + `validation-report-<date>.md`
+- **Output:** Section 10 (validation results) of `pipeline-design.md` — no separate report file
 
 ### Stage 12 — Handoff Summary
 - **Actor:** Orchestrator

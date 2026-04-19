@@ -85,7 +85,7 @@
 
     { "id": "n_s11", "label": "Stage 11: Validate Pipeline (dbt build --full-refresh)", "type": "agent_background_sequential", "lane": "lane_specialists", "agent": "dbt-pipeline-validator", "stage": 11 },
     { "id": "n_s11_skill", "label": "dbt-runner build + coverage report", "type": "skill", "lane": "lane_skills", "stage": 11 },
-    { "id": "n_s11_artifact", "label": "Section 10 + validation-report-<date>.md", "type": "artifact", "lane": "lane_artifacts", "stage": 11 },
+    { "id": "n_s11_artifact", "label": "Section 10 of pipeline-design.md (no separate report)", "type": "artifact", "lane": "lane_artifacts", "stage": 11 },
 
     { "id": "n_s12", "label": "Stage 12: Handoff Summary — Status = Validated", "type": "orchestrator", "lane": "lane_orchestrator", "stage": 12 },
     { "id": "n_end", "label": "Tested dbt pipeline — next: tmdl-scaffold for Power BI semantic layer", "type": "artifact", "lane": "lane_artifacts", "stage": "end" }

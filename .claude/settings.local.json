@@ -3,7 +3,14 @@
     "allow": [
       "mcp__youtube__searchVideos",
       "mcp__youtube__getTranscripts",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Read(//c/tmp/pbip-test/**)",
+      "Bash(PYTHONIOENCODING=utf-8 python \"C:/Users/kavas/Documents/GitHub/DBT Pipeline Plugin/skills/pbip-from-dbt/scripts/build_pbip.py\" --output \"4 - Semantic Layer\" --name \"Sales Analytics\" --server \"myserver.db.windows.net\" --database \"SalesDW\" --verbose)",
+      "Bash(rm -rf \"/tmp/pbip-test/4 - Semantic Layer\"/*)",
+      "Bash(cat)",
+      "Bash(PYTHONIOENCODING=utf-8 python \"C:/Users/kavas/Documents/GitHub/DBT Pipeline Plugin/skills/pbip-from-dbt/scripts/build_pbip.py\" --output \"4 - Semantic Layer\" --name \"Sales Analytics\" --verbose)",
+      "Bash(PYTHONIOENCODING=utf-8 python \"C:/Users/kavas/Documents/GitHub/DBT Pipeline Plugin/skills/pbip-from-dbt/scripts/build_pbip.py\" --output \"4 - Semantic Layer\" --name \"Empty\" --design-file \"1 - Documentation/pipeline-design-empty.md\" --server \"x\" --database \"y\")",
+      "Bash(echo \"exit=$?\")"
     ]
   }
 }
