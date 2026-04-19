@@ -6,12 +6,13 @@ Detects primary keys, calculates statistics, infers data types, and recommends d
 """
 
 import argparse
+import csv
 import os
 import sys
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Tuple
 import re
 import glob as file_glob
 
@@ -88,6 +89,11 @@ class DataProfiler:
         self.source_type = source_type
         self.engine = None
         self.csv_data = None  # For CSV profiling
+        # SQL-sourced tables always have column names (DDL defines them), so
+        # the default header_status for a DB table is 'present'. CSV loading
+        # overwrites these with the actual detection result.
+        self.header_status: str = 'present'
+        self.header_detection_reason: str = 'SQL source — column names from DDL'
 
         # Set up export directory - always write to 1 - Documentation/data-profiles/
         # relative to the project root. Create the full path if it doesn't exist.
@@ -156,7 +162,13 @@ class DataProfiler:
             self._log("✓ Disconnected")
 
     def load_csv(self, file_path: str) -> bool:
-        """Load CSV file into pandas DataFrame."""
+        """Load CSV file into pandas DataFrame.
+
+        Detects whether the CSV has a header row. If NOT, uses synthetic
+        column names (col_0, col_1, ...) and records the fact so downstream
+        agents can refuse to invent meaningful names. This prevents the silent
+        "pandas treats row 0 data as headers" trap on headerless CSVs.
+        """
         try:
             csv_path = Path(file_path)
             if not csv_path.exists():
@@ -164,18 +176,101 @@ class DataProfiler:
                 return False
 
             self._log(f"Loading CSV: {csv_path.name}")
-            
-            # Read CSV with type inference
-            self.csv_data = pd.read_csv(file_path, low_memory=False)
-            
-            # Attempt to infer better types
+
+            # Step 1: detect header presence BEFORE pandas assumes one exists
+            self.header_status, self.header_detection_reason = self._detect_csv_header(file_path)
+            self._log(f"Header detection: status={self.header_status} ({self.header_detection_reason})")
+
+            # Step 2: read with the right header setting
+            if self.header_status == 'present':
+                self.csv_data = pd.read_csv(file_path, low_memory=False)
+            else:
+                # missing or ambiguous — use synthetic names, do NOT let pandas
+                # treat row 0 as headers
+                self.csv_data = pd.read_csv(file_path, header=None, low_memory=False)
+                self.csv_data.columns = [f"col_{i}" for i in range(len(self.csv_data.columns))]
+
+            # Step 3: type inference
             self.csv_data = self._infer_types(self.csv_data)
-            
+
             self._log(f"✓ Loaded {len(self.csv_data):,} rows, {len(self.csv_data.columns)} columns")
             return True
 
         except Exception as e:
             print(f"❌ Failed to load CSV: {e}", file=sys.stderr)
+            return False
+
+    def _detect_csv_header(self, file_path: str) -> Tuple[str, str]:
+        """Heuristically determine if a CSV has a header row.
+
+        Returns (status, reason):
+            status  : 'present' | 'missing' | 'ambiguous'
+            reason  : short human-readable explanation for logs + quality issue
+
+        Strategy:
+            1. Use csv.Sniffer.has_header() on a 16 KB sample — stdlib heuristic
+               that works by comparing row 0 to column types inferred from the
+               rest of the sample. Reliable when headers are clearly
+               non-numeric strings.
+            2. Sanity-override when Sniffer disagrees with a stronger signal:
+               if row 0 is entirely numeric, force 'missing' regardless of
+               what Sniffer says. Numeric header rows almost never occur in
+               the real world; this catches Sniffer false-positives.
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='replace', newline='') as f:
+                sample = f.read(16384)
+            if not sample.strip():
+                return 'missing', 'file is empty or whitespace only'
+
+            # Sniffer verdict
+            try:
+                sniffer_says_header = csv.Sniffer().has_header(sample)
+            except csv.Error as e:
+                # Sniffer gives up on very uniform data — treat as ambiguous,
+                # let the user or data-explorer agent resolve
+                return 'ambiguous', f'csv.Sniffer could not decide: {e}'
+
+            # Sanity override: inspect row 0 directly
+            reader = csv.reader(sample.splitlines())
+            try:
+                row0 = next(reader)
+            except StopIteration:
+                return 'missing', 'no rows found in sample'
+
+            if not row0:
+                return 'missing', 'row 0 is empty'
+
+            numeric_cells = sum(1 for cell in row0 if self._looks_numeric(cell))
+            numeric_ratio = numeric_cells / len(row0)
+
+            if numeric_ratio >= 0.5:
+                # more than half the row 0 cells are numeric → overwhelmingly
+                # likely to be data, not headers
+                return 'missing', f'row 0 is {numeric_ratio:.0%} numeric — treated as data, not headers'
+
+            if sniffer_says_header:
+                return 'present', 'csv.Sniffer detected a header row'
+
+            return 'missing', 'csv.Sniffer did not detect a header row'
+
+        except Exception as e:
+            # Don't fail the whole profile because of header detection trouble;
+            # mark ambiguous and continue
+            return 'ambiguous', f'header detection raised: {e}'
+
+    @staticmethod
+    def _looks_numeric(cell: str) -> bool:
+        """True if a cell string parses as a plain number (int or float)."""
+        if cell is None:
+            return False
+        s = cell.strip()
+        if not s:
+            return False
+        try:
+            float(s)
+            return True
+        except ValueError:
             return False
 
     def _infer_types(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -967,6 +1062,43 @@ class DataProfiler:
                 if original != sanitized:
                     column_name_mapping[original] = sanitized
 
+        # When headers were missing or ambiguous, inject a quality issue and
+        # a dedicated block so downstream agents (business-analyst especially)
+        # cannot silently treat synthetic col_N names as meaningful.
+        if self.header_status != 'present':
+            synthetic_names = [p['column_name'] for p in profiles]
+            quality_issues = list(quality_issues) + [{
+                'issue_type': 'missing_header_row',
+                'severity': 'critical',
+                'description': (
+                    f"CSV header detection returned '{self.header_status}': "
+                    f"{self.header_detection_reason}. Column names in this profile "
+                    f"are synthetic placeholders (col_0, col_1, ...). Do NOT assume "
+                    f"meaningful names — verify against a published data dictionary "
+                    f"or confirm with the user before building staging models."
+                ),
+                'synthetic_column_names': synthetic_names,
+                'action_required': (
+                    "business-analyst must verify headers via WebSearch for a "
+                    "published dictionary and/or AskUserQuestion, then rewrite "
+                    "this profile JSON with verified names. dbt-staging-builder "
+                    "must refuse to build from unverified synthetic headers."
+                ),
+            }]
+
+        header_info = {
+            'status': self.header_status,
+            'detection_reason': self.header_detection_reason,
+            'verified': False,       # flipped to True by business-analyst after confirmation
+            'verified_by': None,     # 'web_dictionary' | 'user_confirmation' | 'ddl' (for SQL)
+            'verification_source': None,  # URL, user note, or DDL reference
+        }
+        # SQL sources have DDL-backed names; mark verified immediately.
+        if self.source_type != 'csv':
+            header_info['verified'] = True
+            header_info['verified_by'] = 'ddl'
+            header_info['verification_source'] = f'{self.source_type} catalog'
+
         # Build complete profile
         table_profile = {
             'table_name': table_name,
@@ -976,6 +1108,7 @@ class DataProfiler:
             'profile_date': datetime.now().isoformat(),
             'columns': profiles,
             'column_name_mapping': column_name_mapping,
+            'header': header_info,
             'quality_issues': quality_issues,
             'recommendations': recommendations
         }

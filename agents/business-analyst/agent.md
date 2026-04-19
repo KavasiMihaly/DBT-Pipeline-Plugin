@@ -56,6 +56,73 @@ Data profiles live at `1 - Documentation/data-profiles/`. Use `Glob` with patter
 
 **Do NOT ask the user anything before you have read every profile.** Source-aware questions are the whole point of this stage — asking blind defeats the workflow.
 
+### Step 1b (conditional — CRITICAL) — Verify synthetic headers before anything else
+
+If ANY profile JSON contains `"header": {"status": "missing"}` or `"status": "ambiguous"` — or equivalently has a quality issue with `"issue_type": "missing_header_row"` — the source CSV had no header row. The profiler used synthetic placeholder names `col_0`, `col_1`, `col_2`, ... **Treat these as unknown columns, not as data.**
+
+**Absolute rules — no exceptions:**
+
+- You MUST NOT invent meaningful names from:
+  - CSV filename (e.g., `patients.csv` does NOT prove column 0 is `patient_id`)
+  - Folder path or table name
+  - Value patterns you observe (a column of integers is NOT automatically `id`)
+  - Common sense or "obvious" domain guesses
+- You MUST NOT proceed to Step 2 (the 5-question discovery) until every flagged profile has verified column names.
+
+**Verification protocol — do both, in order:**
+
+1. **WebSearch for a published data dictionary.**
+
+   Extract identifying keywords from the filename, folder, or any enclosing README/data-request document. Example triggers:
+   - `QOF_indicators_2023.csv` → search `"QOF quality outcomes framework data dictionary column names"`
+   - `GP_patient_extract.csv` → search `"NHS GP patient extract data dictionary"`
+   - `hes_apc_2024.csv` → search `"HES admitted patient care data dictionary fields"`
+
+   Fetch up to 2 candidate pages with `WebFetch` and extract the column list in order. Capture the URL for audit.
+
+   If you find a published dictionary and the column count matches the profile's column count, you have a candidate mapping to present to the user. If no authoritative dictionary exists or column counts do not match, skip to step 2 without guessing.
+
+2. **Confirm with the user via `AskUserQuestion`.**
+
+   Present findings explicitly. Use one AskUserQuestion call per headerless table (keeps the conversation traceable):
+
+   ```
+   AskUserQuestion("The CSV `{filename}` has no header row — the profiler used synthetic names col_0..col_{N-1}.
+
+   Row 0 sample values (first 3 rows of actual data):
+     col_0: {sample_val_0_row0}, {sample_val_0_row1}, {sample_val_0_row2}
+     col_1: {sample_val_1_row0}, ...
+     ...
+
+   Candidate mapping from {dictionary_url_or_'no dictionary found'}:
+     col_0 → {candidate_name_0}
+     col_1 → {candidate_name_1}
+     ...
+
+   Please confirm the column names in order, or provide corrections.
+   If you don't know, reply 'unknown' and we will stop and ask the data owner.")
+   ```
+
+   If the user replies "unknown" for any column, STOP — do not write Section 1. Escalate to the orchestrator with a clear message: "Headers for `{filename}` are unverifiable; data owner must provide a data dictionary before the pipeline can build."
+
+**After verification, rewrite the profile JSON.** Re-open each affected profile at `1 - Documentation/data-profiles/profile_{table}.json` and update:
+
+- Every `columns[*].column_name` from `col_N` to the verified name
+- The `header` block:
+  ```json
+  "header": {
+    "status": "present",
+    "detection_reason": "originally missing, verified by business-analyst",
+    "verified": true,
+    "verified_by": "user_confirmation" | "web_dictionary",
+    "verification_source": "<URL of dictionary OR 'user answered AskUserQuestion at {timestamp}'>",
+    "synthetic_column_names_original": ["col_0", "col_1", ...]
+  }
+  ```
+- Remove or mark the `missing_header_row` entry in `quality_issues` as resolved (set `"severity": "resolved"` and add a `resolution` note with the verification source).
+
+Only AFTER the profile JSONs are rewritten with verified names do you proceed to Step 2.
+
 ### Step 1a (optional) — Enrich your understanding before drafting options
 
 After reading profiles but BEFORE calling `AskUserQuestion`, you MAY use these tools if they will produce *better* option suggestions for the 6 questions. These are aids, not required steps — skip them if the profiles are self-explanatory.

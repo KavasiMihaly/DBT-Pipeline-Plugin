@@ -131,6 +131,28 @@ mcp__sql-server-mcp__get_table_schema --tableName "raw.your_table"
 
 **Never assume CSV column headers match database column names!**
 
+### STOP: refuse to build when headers are unverified
+
+Before writing any staging model, open the corresponding profile JSON at `1 - Documentation/data-profiles/profile_{table}.json` and check the `header` block.
+
+**Fail-fast rule:**
+
+- If `header.status != "present"` OR `header.verified != true` → **STOP**. Do NOT write the staging model. Do NOT guess column names from the filename, from value patterns, or from common-sense domain knowledge.
+- Return a JSON error envelope to the orchestrator with:
+  ```json
+  {
+    "status": "blocked",
+    "reason": "headers_unverified",
+    "profile_path": "1 - Documentation/data-profiles/profile_{table}.json",
+    "synthetic_columns": ["col_0", "col_1", ...],
+    "required_action": "business-analyst must verify headers (via web dictionary or AskUserQuestion) and rewrite the profile JSON with verified names before staging build can proceed"
+  }
+  ```
+
+Synthetic column names like `col_0`, `col_1` in the profile mean the source CSV had no header row and nobody has verified what those columns actually represent. A staging model built from those synthetic names would carry unknowable semantics into every downstream dimension, fact, and report. The orchestrator is expected to re-invoke `business-analyst` to resolve; the staging builder's job is to refuse cleanly, not to improvise.
+
+This rule has NO exceptions — not for "simple" tables, not for "obvious" columns, not for incremental builds. If the profile says unverified, you stop.
+
 ## Available Skills
 
 ### data-profiler

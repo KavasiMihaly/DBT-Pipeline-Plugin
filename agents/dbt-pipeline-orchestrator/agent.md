@@ -195,6 +195,10 @@ Wait for all agents to complete. Collect all profile JSON envelopes. Merge the r
 
 **Now that profiles exist, spawn the business analyst to ask informed questions.** The BA reads the profile JSONs and presents source-relevant options to the user.
 
+**Headerless CSV detection.** Before spawning the BA, scan every profile JSON for `"header": {"status": "missing"}` or `"ambiguous"`. If any profile flags missing headers, tell the BA explicitly in the prompt that header verification (agent's Step 1b) MUST happen before the 5-question discovery. Example phrasing: *"N of the profiles have missing headers — verify them before the 5-question call. If headers cannot be verified, do not write Section 1; escalate instead."*
+
+If the BA returns without writing Section 1 AND its output mentions `headers_unverified` or `data dictionary`, STOP the pipeline. Write to Section 12 (Design Decisions Log): `{timestamp}: Stage 2 halted — headers for {file(s)} could not be verified. Data owner must provide a data dictionary before the build can proceed.` Do NOT retry the BA spawn — a retry cannot produce a dictionary that doesn't exist. Escalate to the user with the specific file(s) needing a dictionary.
+
 Spawn `dbt-pipeline-toolkit:business-analyst:business-analyst` in **foreground** (interactive):
 
 ```
