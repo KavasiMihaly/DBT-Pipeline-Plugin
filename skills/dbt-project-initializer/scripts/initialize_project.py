@@ -749,9 +749,18 @@ def generate_settings_local_json() -> str:
 
 
 def generate_gitignore() -> str:
-    """Generate .gitignore content."""
-    return """# Python
+    """Generate .gitignore content.
+
+    Patterns MUST block: installed tools (venv, pip packages, dbt packages),
+    build artifacts (target/, logs/), and credential files (profiles.yml,
+    .env). Orchestrator Stage 5 runs `git add -A` immediately after the
+    skill + setup script complete; anything not listed here gets committed.
+    """
+    return """# Python virtual environments (installed tools — NEVER commit)
 .venv/
+venv/
+env/
+ENV/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -760,14 +769,32 @@ __pycache__/
 .eggs/
 *.egg
 
-# dbt
+# Python test / type-check caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# dbt installed packages + build output (NEVER commit)
 target/
 dbt_packages/
-logs/
 dbt_modules/
+logs/
+# Explicit nested paths (belt-and-suspenders; root patterns above already
+# match at any depth but listing them makes intent obvious to reviewers)
+3 - Data Pipeline/target/
+3 - Data Pipeline/dbt_packages/
+3 - Data Pipeline/logs/
 
-# Profiles (contains credentials)
+# Credentials and secrets (NEVER commit)
 3 - Data Pipeline/profiles.yml
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.yml
 
 # IDE
 .idea/
@@ -1048,6 +1075,14 @@ def main():
     # Step 3: Generate configuration files
     print("\nGenerating configuration files...")
 
+    # .gitignore FIRST — must exist before any subprocess that creates
+    # `.venv/`, `dbt_packages/`, `target/`, `logs/`. If a later step crashes
+    # after artifacts are generated but before `.gitignore` is written, the
+    # orchestrator's `git add -A` would commit the venv/packages. Writing
+    # this first makes that class of failure impossible.
+    (target_path / ".gitignore").write_text(generate_gitignore(), encoding='utf-8')
+    print("  Created: .gitignore (written first to protect against venv/package leaks)")
+
     # dbt_project.yml
     (data_pipeline_path / "dbt_project.yml").write_text(generate_dbt_project_yml(config), encoding='utf-8')
     print("  Created: 3 - Data Pipeline/dbt_project.yml")
@@ -1076,10 +1111,6 @@ def main():
     # README.md for Architecture Setup
     (arch_setup_path / "README.md").write_text(generate_architecture_readme(config), encoding='utf-8')
     print("  Created: 0 - Architecture Setup/README.md")
-
-    # .gitignore
-    (target_path / ".gitignore").write_text(generate_gitignore(), encoding='utf-8')
-    print("  Created: .gitignore")
 
     # CLAUDE.md
     (target_path / "CLAUDE.md").write_text(generate_claude_md(config), encoding='utf-8')

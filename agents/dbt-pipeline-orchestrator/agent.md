@@ -323,34 +323,77 @@ Wait for completion. Verify folders created. Write Section 4 of pipeline-design.
 
 Issue each of the following as a **separate atomic Bash call**, reading each command's output before deciding the next. Do NOT chain them with `&&`/`||` or subshells.
 
-**Step 1 — Check whether a git repo already exists:**
+**Step 1 — Pre-flight: verify `.gitignore` exists before ANY git operation.**
+
+The architecture-setup skill installs Python packages into `.venv/`, dbt packages into `3 - Data Pipeline/dbt_packages/`, and dbt artifacts into `target/` + `logs/`. Those folders **must not** get committed. `.gitignore` must be in place before `git add -A` runs.
+
+First, confirm the file exists:
+
+```bash
+ls .gitignore
+```
+
+If missing, STOP and escalate — the skill did not complete correctly. Do NOT create `.gitignore` yourself; re-run the architecture-setup agent.
+
+Then use the native `Grep` tool (NOT Bash grep, which is not auto-approved) to verify each critical pattern is present in `.gitignore`:
+
+- `Grep(pattern: "^\\.venv/$", path: ".gitignore")` — must match
+- `Grep(pattern: "^dbt_packages/$", path: ".gitignore")` — must match
+- `Grep(pattern: "^target/$", path: ".gitignore")` — must match
+- `Grep(pattern: "^logs/$", path: ".gitignore")` — must match
+
+If any Grep returns no match, STOP and escalate — the `.gitignore` is incomplete and committing now would leak installed tools into git history. Do NOT edit `.gitignore` yourself; re-run the architecture-setup skill to regenerate the full file.
+
+**Step 2 — Check whether a git repo already exists:**
 
 ```bash
 git rev-parse --git-dir
 ```
 
-- Exit 0 → repo already exists. Skip to Step 5 (`git status`) to verify it's usable.
-- Non-zero exit → no repo yet. Continue to Step 2.
+- Exit 0 → repo already exists. Skip to Step 7 (`git status`) to verify it's usable.
+- Non-zero exit → no repo yet. Continue to Step 3.
 
-**Step 2 — Initialize a new repo:**
+**Step 3 — Initialize a new repo:**
 
 ```bash
 git init
 ```
 
-**Step 3 — Stage all files from the initial scaffold:**
+**Step 4 — Stage all files from the initial scaffold:**
 
 ```bash
 git add -A
 ```
 
-**Step 4 — Commit the initial scaffold:**
+**Step 5 — Leak check: confirm no installed tools got staged.**
+
+`.gitignore` should have excluded `.venv/`, `dbt_packages/`, `target/`, and `logs/`. If any of these show up in `git status --short`, the gitignore was wrong or written too late. Run each check atomically:
+
+```bash
+git ls-files --cached --error-unmatch .venv
+```
+```bash
+git ls-files --cached --error-unmatch venv
+```
+```bash
+git ls-files --cached --error-unmatch "3 - Data Pipeline/dbt_packages"
+```
+```bash
+git ls-files --cached --error-unmatch "3 - Data Pipeline/target"
+```
+```bash
+git ls-files --cached --error-unmatch "3 - Data Pipeline/logs"
+```
+
+**Expected: each command returns exit 1** (the path is NOT tracked — this is what we want). If any command returns exit 0 (path IS tracked), it means an installed-tool folder leaked through. STOP, run `git rm -r --cached <leaked-path>` to unstage, patch `.gitignore`, then retry from Step 4. Do NOT commit.
+
+**Step 6 — Commit the initial scaffold:**
 
 ```bash
 git commit -m "Initial scaffold"
 ```
 
-**Step 5 — Verify git is working:**
+**Step 7 — Verify git is working:**
 
 ```bash
 git status
