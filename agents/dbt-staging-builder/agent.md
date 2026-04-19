@@ -544,9 +544,10 @@ This agent can be run in background mode for autonomous task completion.
 **Usage:**
 ```
 Task(
-  subagent_type: "dbt-staging-builder",
+  subagent_type: "dbt-pipeline-toolkit:dbt-staging-builder:dbt-staging-builder",
   prompt: "Create staging model for...",
-  run_in_background: true
+  run_in_background: true,
+  mode: "acceptEdits"
 )
 ```
 

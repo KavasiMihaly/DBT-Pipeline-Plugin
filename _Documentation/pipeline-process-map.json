@@ -1,0 +1,188 @@
+{
+  "title": "dbt Pipeline Plugin — End-to-End Process Map",
+  "subtitle": "CSV files → tested dbt star-schema pipeline on SQL Server",
+  "description": "One top-level orchestrator agent coordinates 8 specialist agents across 13 stages. Two user touch points. A single master document (pipeline-design.md) accumulates state.",
+  "layout": "vertical-swimlane",
+  "legend": {
+    "node_types": {
+      "user": "User action / input",
+      "orchestrator": "Orchestrator (main thread)",
+      "agent_foreground": "Foreground subagent (interactive)",
+      "agent_background_sequential": "Background subagent (sequential)",
+      "agent_background_parallel": "Background subagent (parallel fan-out)",
+      "skill": "Plugin skill (script)",
+      "artifact": "Artifact / document",
+      "gate": "Decision gate",
+      "touch_point": "User touch point"
+    },
+    "colors": {
+      "user": "#2563eb",
+      "orchestrator": "#f59e0b",
+      "agent_foreground": "#10b981",
+      "agent_background_sequential": "#8b5cf6",
+      "agent_background_parallel": "#ec4899",
+      "skill": "#06b6d4",
+      "artifact": "#94a3b8",
+      "gate": "#ef4444",
+      "touch_point": "#facc15"
+    }
+  },
+  "swimlanes": [
+    { "id": "lane_user", "label": "User" },
+    { "id": "lane_orchestrator", "label": "Orchestrator" },
+    { "id": "lane_specialists", "label": "Specialist Agents" },
+    { "id": "lane_skills", "label": "Skills / Scripts" },
+    { "id": "lane_artifacts", "label": "Artifacts" }
+  ],
+  "nodes": [
+    { "id": "n0_start", "label": "User drops CSVs in empty repo + runs `claude --agent dbt-pipeline-orchestrator`", "type": "user", "lane": "lane_user", "stage": "start" },
+
+    { "id": "n_pre", "label": "Pre-Stage: SQL connection check", "type": "orchestrator", "lane": "lane_orchestrator", "stage": "pre" },
+    { "id": "n_pre_skill", "label": "sql-connection / configure.py --test-only", "type": "skill", "lane": "lane_skills", "stage": "pre" },
+    { "id": "n_pre_gate", "label": "Connection OK?", "type": "gate", "lane": "lane_orchestrator", "stage": "pre" },
+
+    { "id": "n_s0", "label": "Stage 0: Source Discovery — find *.csv, detect fresh vs incremental", "type": "orchestrator", "lane": "lane_orchestrator", "stage": 0 },
+
+    { "id": "n_s1", "label": "Stage 1: Source Profiling (parallel, 1 agent per CSV)", "type": "agent_background_parallel", "lane": "lane_specialists", "agent": "data-explorer", "stage": 1 },
+    { "id": "n_s1_skill", "label": "data-profiler / profile_data.py", "type": "skill", "lane": "lane_skills", "stage": 1 },
+    { "id": "n_s1_artifact", "label": "profile_<name>.json × N", "type": "artifact", "lane": "lane_artifacts", "stage": 1 },
+    { "id": "n_s1_merge", "label": "Orchestrator merges profiles → pipeline-design.md Sections 2 + 3", "type": "orchestrator", "lane": "lane_orchestrator", "stage": 1 },
+
+    { "id": "n_s2", "label": "Stage 2: Discovery Q&A (5 questions)", "type": "agent_foreground", "lane": "lane_specialists", "agent": "business-analyst", "stage": 2 },
+    { "id": "n_s2_touch", "label": "USER TOUCH POINT 1 — answer 5 questions", "type": "touch_point", "lane": "lane_user", "stage": 2 },
+    { "id": "n_s2_artifact", "label": "pipeline-design.md Section 1 (Requirements)", "type": "artifact", "lane": "lane_artifacts", "stage": 2 },
+
+    { "id": "n_s3", "label": "Stage 3: Draft proposed data model (staging + dims + facts + semantic)", "type": "orchestrator", "lane": "lane_orchestrator", "stage": 3 },
+    { "id": "n_s3_artifact", "label": "Sections 5, 6, 7, 8, 9 drafted (incl. Mermaid ER diagram)", "type": "artifact", "lane": "lane_artifacts", "stage": 3 },
+
+    { "id": "n_s4", "label": "Stage 4: Plan Approval Gate (ExitPlanMode)", "type": "gate", "lane": "lane_orchestrator", "stage": 4 },
+    { "id": "n_s4_touch", "label": "USER TOUCH POINT 2 — approve or revise plan", "type": "touch_point", "lane": "lane_user", "stage": 4 },
+
+    { "id": "n_s5", "label": "Stage 5: Project Scaffolding (skipped if incremental)", "type": "agent_foreground", "lane": "lane_specialists", "agent": "dbt-architecture-setup", "stage": 5 },
+    { "id": "n_s5_skill", "label": "folders + venv + dbt_project.yml + profiles.yml", "type": "skill", "lane": "lane_skills", "stage": 5 },
+    { "id": "n_s5_git", "label": "git init + initial commit (mandatory gate for worktrees)", "type": "gate", "lane": "lane_orchestrator", "stage": 5 },
+
+    { "id": "n_s6", "label": "Stage 6: Load Source Data (cp CSVs → 2 - Source Files/)", "type": "orchestrator", "lane": "lane_orchestrator", "stage": 6 },
+    { "id": "n_s6_skill", "label": "sql-executor / load_data.py --schema raw", "type": "skill", "lane": "lane_skills", "stage": 6 },
+    { "id": "n_s6_artifact", "label": "raw.* tables in SQL Server + Section 11 rows", "type": "artifact", "lane": "lane_artifacts", "stage": 6 },
+
+    { "id": "n_s7", "label": "Stage 7: Build Staging Models (sequential, compile-one-then-scale)", "type": "agent_background_sequential", "lane": "lane_specialists", "agent": "dbt-staging-builder", "stage": 7 },
+    { "id": "n_s7_skill", "label": "dbt-runner: parse + run --select stg_*", "type": "skill", "lane": "lane_skills", "stage": 7 },
+    { "id": "n_s7_artifact", "label": "stg_*.sql × N + Section 5 + Section 11", "type": "artifact", "lane": "lane_artifacts", "stage": 7 },
+
+    { "id": "n_s8", "label": "Stage 8: Build Dimensions (parallel fan-out, git worktrees)", "type": "agent_background_parallel", "lane": "lane_specialists", "agent": "dbt-dimension-builder", "stage": 8 },
+    { "id": "n_s8_skill", "label": "dbt-runner: run --select dim_*", "type": "skill", "lane": "lane_skills", "stage": 8 },
+    { "id": "n_s8_artifact", "label": "dim_*.sql × N + Section 6 + Section 11", "type": "artifact", "lane": "lane_artifacts", "stage": 8 },
+    { "id": "n_s8_merge", "label": "Merge worktrees back to main (gate before facts)", "type": "gate", "lane": "lane_orchestrator", "stage": 8 },
+
+    { "id": "n_s9", "label": "Stage 9: Build Facts (parallel fan-out, git worktrees)", "type": "agent_background_parallel", "lane": "lane_specialists", "agent": "dbt-fact-builder", "stage": 9 },
+    { "id": "n_s9_skill", "label": "dbt-runner: run --select fct_*", "type": "skill", "lane": "lane_skills", "stage": 9 },
+    { "id": "n_s9_artifact", "label": "fct_*.sql × N + Section 7 + Section 11", "type": "artifact", "lane": "lane_artifacts", "stage": 9 },
+
+    { "id": "n_s10", "label": "Stage 10: Write Tests (iterate until ≥80% coverage)", "type": "agent_background_sequential", "lane": "lane_specialists", "agent": "dbt-test-writer", "stage": 10 },
+    { "id": "n_s10_skill", "label": "dbt-test-coverage-analyzer + dbt-runner test", "type": "skill", "lane": "lane_skills", "stage": 10 },
+    { "id": "n_s10_artifact", "label": "Test YAMLs + Section 9", "type": "artifact", "lane": "lane_artifacts", "stage": 10 },
+
+    { "id": "n_s11", "label": "Stage 11: Validate Pipeline (dbt build --full-refresh)", "type": "agent_background_sequential", "lane": "lane_specialists", "agent": "dbt-pipeline-validator", "stage": 11 },
+    { "id": "n_s11_skill", "label": "dbt-runner build + coverage report", "type": "skill", "lane": "lane_skills", "stage": 11 },
+    { "id": "n_s11_artifact", "label": "Section 10 + validation-report-<date>.md", "type": "artifact", "lane": "lane_artifacts", "stage": 11 },
+
+    { "id": "n_s12", "label": "Stage 12: Handoff Summary — Status = Validated", "type": "orchestrator", "lane": "lane_orchestrator", "stage": 12 },
+    { "id": "n_end", "label": "Tested dbt pipeline — next: tmdl-scaffold for Power BI semantic layer", "type": "artifact", "lane": "lane_artifacts", "stage": "end" }
+  ],
+  "edges": [
+    { "from": "n0_start", "to": "n_pre", "label": "invoke" },
+    { "from": "n_pre", "to": "n_pre_skill", "label": "calls" },
+    { "from": "n_pre_skill", "to": "n_pre_gate", "label": "result" },
+    { "from": "n_pre_gate", "to": "n_s0", "label": "pass" },
+    { "from": "n_pre_gate", "to": "n0_start", "label": "fail → prompt user for config", "style": "dashed" },
+
+    { "from": "n_s0", "to": "n_s1", "label": "fan-out 1 per CSV" },
+    { "from": "n_s1", "to": "n_s1_skill", "label": "runs" },
+    { "from": "n_s1_skill", "to": "n_s1_artifact", "label": "writes" },
+    { "from": "n_s1_artifact", "to": "n_s1_merge", "label": "read by" },
+    { "from": "n_s1_merge", "to": "n_s2", "label": "triggers" },
+
+    { "from": "n_s2", "to": "n_s2_touch", "label": "asks" },
+    { "from": "n_s2_touch", "to": "n_s2_artifact", "label": "captured in" },
+    { "from": "n_s2_artifact", "to": "n_s3", "label": "feeds" },
+
+    { "from": "n_s3", "to": "n_s3_artifact", "label": "writes" },
+    { "from": "n_s3_artifact", "to": "n_s4", "label": "presents" },
+    { "from": "n_s4", "to": "n_s4_touch", "label": "asks" },
+    { "from": "n_s4_touch", "to": "n_s3", "label": "revise", "style": "dashed" },
+    { "from": "n_s4_touch", "to": "n_s5", "label": "approve" },
+
+    { "from": "n_s5", "to": "n_s5_skill", "label": "scaffolds" },
+    { "from": "n_s5_skill", "to": "n_s5_git", "label": "completes" },
+    { "from": "n_s5_git", "to": "n_s6", "label": "pass" },
+
+    { "from": "n_s6", "to": "n_s6_skill", "label": "calls" },
+    { "from": "n_s6_skill", "to": "n_s6_artifact", "label": "loads" },
+    { "from": "n_s6_artifact", "to": "n_s7", "label": "triggers" },
+
+    { "from": "n_s7", "to": "n_s7_skill", "label": "validates via" },
+    { "from": "n_s7_skill", "to": "n_s7_artifact", "label": "produces" },
+    { "from": "n_s7_artifact", "to": "n_s8", "label": "enables" },
+
+    { "from": "n_s8", "to": "n_s8_skill", "label": "runs" },
+    { "from": "n_s8_skill", "to": "n_s8_artifact", "label": "produces" },
+    { "from": "n_s8_artifact", "to": "n_s8_merge", "label": "merged via" },
+    { "from": "n_s8_merge", "to": "n_s9", "label": "unblocks" },
+
+    { "from": "n_s9", "to": "n_s9_skill", "label": "runs" },
+    { "from": "n_s9_skill", "to": "n_s9_artifact", "label": "produces" },
+    { "from": "n_s9_artifact", "to": "n_s10", "label": "triggers" },
+
+    { "from": "n_s10", "to": "n_s10_skill", "label": "iterates via" },
+    { "from": "n_s10_skill", "to": "n_s10_artifact", "label": "produces" },
+    { "from": "n_s10_artifact", "to": "n_s11", "label": "triggers" },
+
+    { "from": "n_s11", "to": "n_s11_skill", "label": "runs" },
+    { "from": "n_s11_skill", "to": "n_s11_artifact", "label": "writes" },
+    { "from": "n_s11_artifact", "to": "n_s12", "label": "triggers" },
+
+    { "from": "n_s12", "to": "n_end", "label": "delivers" }
+  ],
+  "master_document": {
+    "path": "1 - Documentation/pipeline-design.md",
+    "description": "Single source of truth. Orchestrator holds the write lock except for Sections 1, 9, 10 (written directly by BA, test-writer, validator).",
+    "sections": [
+      { "id": 1, "title": "Requirements", "written_by": "business-analyst", "at_stage": 2 },
+      { "id": 2, "title": "Source Inventory", "written_by": "orchestrator", "at_stage": 1 },
+      { "id": 3, "title": "Source Relationship Map", "written_by": "orchestrator", "at_stage": 1 },
+      { "id": 4, "title": "Architecture Decisions", "written_by": "orchestrator", "at_stage": 5 },
+      { "id": 5, "title": "Staging Layer Plan", "written_by": "orchestrator", "at_stage": "3 + 7" },
+      { "id": 6, "title": "Dimension Plan", "written_by": "orchestrator", "at_stage": "3 + 8" },
+      { "id": 7, "title": "Fact Plan", "written_by": "orchestrator", "at_stage": "3 + 9" },
+      { "id": 8, "title": "Semantic Layer Plan", "written_by": "orchestrator", "at_stage": 3 },
+      { "id": 9, "title": "Test Strategy", "written_by": "dbt-test-writer", "at_stage": 10 },
+      { "id": 10, "title": "Validation Results", "written_by": "dbt-pipeline-validator", "at_stage": 11 },
+      { "id": 11, "title": "Created Objects Registry", "written_by": "orchestrator", "at_stage": "6, 7, 8, 9" },
+      { "id": 12, "title": "Design Decisions Log", "written_by": "orchestrator", "at_stage": "all" }
+    ]
+  },
+  "guardrails": [
+    { "name": "Connection verified", "enforced_at": "Pre-stage", "failure_mode": "Prompt user for SQL config" },
+    { "name": "At least 1 CSV found", "enforced_at": "Stage 0", "failure_mode": "Abort with instruction" },
+    { "name": "Git repo initialized", "enforced_at": "Stage 5", "failure_mode": "Hard gate — worktree parallelism depends on it" },
+    { "name": "Row counts match profiles", "enforced_at": "Stage 6", "failure_mode": "Stop and investigate" },
+    { "name": "Dim worktrees merged before facts", "enforced_at": "Stage 9 start", "failure_mode": "ref(dim_*) would not resolve" },
+    { "name": "Test coverage ≥ 80%", "enforced_at": "Stage 10 loop", "failure_mode": "Iterate until target met" },
+    { "name": "All dbt build + tests pass", "enforced_at": "Stage 11", "failure_mode": "Mark 'Build complete, coverage below target'" },
+    { "name": "Atomic Bash only (no &&/||/|/;)", "enforced_at": "Plugin-wide", "failure_mode": "PreToolUse hook falls through → stalled background agent" }
+  ],
+  "user_touch_points": [
+    { "stage": 2, "mechanism": "AskUserQuestion", "purpose": "5 discovery questions on goals, consumers, metrics, time grain, target DB" },
+    { "stage": 4, "mechanism": "ExitPlanMode", "purpose": "Approve or revise proposed data model" }
+  ],
+  "parallelism": {
+    "sequential_stages": ["Pre", 0, 2, 3, 4, 5, 6, 7, 10, 11, 12],
+    "parallel_stages": [
+      { "stage": 1, "fan_out": "1 data-explorer per CSV file" },
+      { "stage": 8, "fan_out": "1 dim-builder per dimension, isolated in git worktrees" },
+      { "stage": 9, "fan_out": "1 fact-builder per fact, isolated in git worktrees" }
+    ],
+    "isolation_mechanism": "Git worktrees — each builder writes in its own worktree; orchestrator merges back before next stage"
+  }
+}

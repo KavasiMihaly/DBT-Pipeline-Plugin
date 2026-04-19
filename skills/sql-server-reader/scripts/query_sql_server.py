@@ -2,7 +2,7 @@
 """
 SQL Server Reader Skill
 Query local SQL Server with read-only access.
-Exports results to CSV in "7 - Data Exports" folder.
+Exports results to CSV in "6 - Data Exports" folder.
 """
 
 import argparse
@@ -95,13 +95,15 @@ class SQLServerReader:
         
         # Set up export directory
         # Primary: use CWD (Claude Code sets CWD to the user's project)
-        # Fallback: walk up from script location (dev-only)
+        # Prefer the new "6 - Data Exports" folder; fall back to legacy
+        # "7 - Data Exports" for projects scaffolded before 2026-04-19.
         cwd = Path.cwd()
-        if (cwd / '7 - Data Exports').exists():
-            project_root = cwd
+        if (cwd / '6 - Data Exports').exists():
+            self.export_dir = cwd / '6 - Data Exports'
+        elif (cwd / '7 - Data Exports').exists():
+            self.export_dir = cwd / '7 - Data Exports'
         else:
-            project_root = cwd  # Use CWD anyway; mkdir below creates the folder
-        self.export_dir = project_root / '7 - Data Exports'
+            self.export_dir = cwd / '6 - Data Exports'
         self.export_dir.mkdir(exist_ok=True)
         
     def _log(self, message: str):
@@ -408,13 +410,13 @@ Examples:
             df = reader.list_tables()
             print("\n" + df.to_string(index=False))
             print(f"\nTotal: {len(df)} tables/views")
-            print(f"Saved to: 7 - Data Exports/table_list.csv")
+            print(f"Saved to: {reader.export_dir.name}/table_list.csv")
         
         elif args.schema:
             df = reader.get_table_schema(args.schema)
             if not df.empty:
                 print("\n" + df.to_string(index=False))
-                print(f"\nSaved to: 7 - Data Exports/schema_{args.schema}.csv")
+                print(f"\nSaved to: {reader.export_dir.name}/schema_{args.schema}.csv")
         
         elif args.query:
             df = reader.execute_query(args.query, limit=args.limit, output_filename=args.output)

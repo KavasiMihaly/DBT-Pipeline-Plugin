@@ -387,9 +387,10 @@ This agent can be run in background mode for autonomous task completion.
 **Usage:**
 ```
 Task(
-  subagent_type: "dbt-fact-builder",
+  subagent_type: "dbt-pipeline-toolkit:dbt-fact-builder:dbt-fact-builder",
   prompt: "Create fct_sales from...",
-  run_in_background: true
+  run_in_background: true,
+  mode: "acceptEdits"
 )
 ```
 

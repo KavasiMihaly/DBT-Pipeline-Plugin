@@ -276,10 +276,3 @@ This skill is designed to be used by the dbt-developer agent for executing dbt o
 - Generate documentation for stakeholders
 - Compile models for SQL review
 
-## Related Resources
-
-See `6 - Agentic Resources/Skills/DBT Developer/` for reference materials on:
-- dbt best practices
-- Model patterns
-- Testing strategies
-- SQL optimization for SQL Server

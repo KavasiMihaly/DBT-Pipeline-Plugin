@@ -85,37 +85,38 @@ dbo_analytics          # Marts - facts and dimensions (fct_*, dim_*)
 
 ```
 ProjectName/
+├── .claude/
+│   └── settings.local.json          # Auto-allows skills and safe bash commands
 ├── 0 - Architecture Setup/
-│   ├── setup_environment.ps1    # Python environment setup
-│   ├── project-config.yml       # Project configuration
-│   └── README.md                # Setup documentation
-├── 1 - Documentation/           # Project docs (empty)
-├── 2 - Source Files/            # CSV source data (empty)
+│   ├── setup_environment.ps1        # Python environment setup
+│   ├── project-config.yml           # Project configuration
+│   └── README.md                    # Setup documentation
+├── 1 - Documentation/
+│   └── data-profiles/               # Data profiler JSON outputs (profile_*.json)
+├── 2 - Source Files/                # CSV source data (empty)
 ├── 3 - Data Pipeline/
-│   ├── dbt_project.yml          # dbt project config
-│   ├── packages.yml             # dbt packages (dbt_utils)
-│   ├── profiles.yml.example     # Profile template
+│   ├── dbt_project.yml              # dbt project config
+│   ├── packages.yml                 # dbt packages (dbt_utils)
+│   ├── profiles.yml                 # Generated connection profile (gitignored)
+│   ├── profiles.yml.example         # Profile template (committed)
 │   ├── models/
-│   │   ├── staging/            # stg_* models
-│   │   ├── intermediate/       # int_* models
-│   │   └── marts/              # dim_* and fct_* models
-│   ├── tests/                   # Custom tests
-│   ├── macros/                  # Custom macros
-│   ├── seeds/                   # Seed data
-│   └── snapshots/               # SCD snapshots
-├── 4 - Semantic Layer/          # Power BI TMDL (empty)
-├── 5 - Report Building/         # Power BI reports (empty)
-├── 6 - Agentic Resources/
-│   └── reference/               # Copied from skill templates
-│       ├── sql-style-guide.md
-│       ├── testing-patterns.md
-│       ├── tmdl-best-practices-guide.md
-│       └── examples/
-├── 7 - Data Exports/            # Query results (empty)
-├── .venv/                       # Python virtual environment
-├── .gitignore                   # Git ignore file
-└── CLAUDE.md                    # Project-specific agent config
+│   │   ├── staging/                 # stg_* models
+│   │   ├── intermediate/            # int_* models
+│   │   └── marts/                   # dim_* and fct_* models
+│   ├── tests/                       # Custom / singular SQL tests
+│   ├── macros/                      # Custom macros
+│   ├── seeds/                       # Seed data
+│   ├── snapshots/                   # SCD Type 2 snapshots
+│   └── analyses/                    # Ad-hoc analyses (non-materialized)
+├── 4 - Semantic Layer/              # Power BI TMDL (empty)
+├── 5 - Report Building/             # Power BI reports (empty)
+├── 6 - Data Exports/                # Query results (empty)
+├── .venv/                           # Python virtual environment
+├── .gitignore                       # Git ignore file
+└── CLAUDE.md                        # Project-specific agent config
 ```
+
+**All `3 - Data Pipeline/` subfolders are created even if empty** because `dbt_project.yml` declares a path for each (`model-paths`, `test-paths`, `macro-paths`, `seed-paths`, `snapshot-paths`, `analysis-paths`). Missing any of them causes `dbt parse` to fail.
 
 ## Virtual Environment Setup
 

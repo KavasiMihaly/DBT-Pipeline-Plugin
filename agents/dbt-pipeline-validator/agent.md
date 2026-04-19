@@ -43,9 +43,10 @@ All findings are reported in the validation report. User reviews AFTER validatio
 **Usage:**
 ```
 Task(
-  subagent_type: "dbt-pipeline-validator",
+  subagent_type: "dbt-pipeline-toolkit:dbt-pipeline-validator:dbt-pipeline-validator",
   prompt: "Validate the completed pipeline...",
-  run_in_background: true
+  run_in_background: true,
+  mode: "acceptEdits"
 )
 ```
 

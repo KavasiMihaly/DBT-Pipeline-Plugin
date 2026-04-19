@@ -44,9 +44,10 @@ This agent is designed for background mode. It requires no user interaction.
 **Usage:**
 ```
 Task(
-  subagent_type: "data-explorer",
+  subagent_type: "dbt-pipeline-toolkit:data-explorer:data-explorer",
   prompt: "Profile all source tables in the raw schema and summarize...",
-  run_in_background: true
+  run_in_background: true,
+  mode: "acceptEdits"
 )
 ```
 

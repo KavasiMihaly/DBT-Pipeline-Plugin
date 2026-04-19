@@ -389,9 +389,10 @@ This agent can be run in background mode for autonomous task completion.
 **Usage:**
 ```
 Task(
-  subagent_type: "dbt-test-writer",
+  subagent_type: "dbt-pipeline-toolkit:dbt-test-writer:dbt-test-writer",
   prompt: "Add tests for all models in...",
-  run_in_background: true
+  run_in_background: true,
+  mode: "acceptEdits"
 )
 ```
 

@@ -223,7 +223,9 @@ def backup_csv_files(project_root: Path) -> dict[str, bytes]:
 def reset_filesystem(project_root: Path, dry_run: bool) -> None:
     """Remove all pipeline-created folders, venv, git, and generated files."""
 
-    # Numbered project folders created by dbt-architecture-setup
+    # Numbered project folders created by dbt-architecture-setup.
+    # Includes legacy "6 - Agentic Resources" and old "7 - Data Exports" so
+    # older scaffolds reset cleanly even after the 2026-04-19 renumbering.
     numbered_folders = [
         "0 - Architecture Setup",
         "1 - Documentation",
@@ -231,6 +233,7 @@ def reset_filesystem(project_root: Path, dry_run: bool) -> None:
         "3 - Data Pipeline",
         "4 - Semantic Layer",
         "5 - Report Building",
+        "6 - Data Exports",
         "6 - Agentic Resources",
         "7 - Data Exports",
     ]

@@ -258,9 +258,7 @@ ls "1 - Documentation/data-profiles/"
 │   └── dbt_project.yml
 ├── 4 - Semantic Layer/      # Power BI TMDL files
 ├── 5 - Report Building/     # .pbip report files
-├── 6 - Agentic Resources/   # Agent/skill configs
-│   └── reference/           # Shared standards and examples
-├── 7 - Data Exports/        # Query results
+├── 6 - Data Exports/        # Query results
 ├── .venv/                   # Python virtual environment
 └── CLAUDE.md                # This file
 ```

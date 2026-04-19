@@ -19,7 +19,6 @@ import argparse
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -85,12 +84,12 @@ def create_folder_structure(target_path: Path) -> dict:
     folders = {
         "0 - Architecture Setup": "Environment and tooling setup",
         "1 - Documentation": "Project documentation and requirements",
+        "1 - Documentation/data-profiles": "Data profiler JSON outputs",
         "2 - Source Files": "Raw source data and samples",
         "3 - Data Pipeline": "dbt models and transformations",
         "4 - Semantic Layer": "Power BI semantic models (TMDL)",
         "5 - Report Building": "Power BI reports and dashboards",
-        "6 - Agentic Resources": "Reference materials and patterns",
-        "7 - Data Exports": "Query results and validation outputs",
+        "6 - Data Exports": "Query results and validation outputs",
     }
 
     created = {}
@@ -123,29 +122,6 @@ def create_dbt_structure(data_pipeline_path: Path) -> None:
     for subfolder in ["staging", "intermediate", "marts"]:
         gitkeep = data_pipeline_path / "models" / subfolder / ".gitkeep"
         gitkeep.touch()
-
-
-def create_agentic_resources(agentic_path: Path, source_reference_path: Path) -> None:
-    """Create agentic resources folder and copy reference materials."""
-    reference_path = agentic_path / "reference"
-    reference_path.mkdir(parents=True, exist_ok=True)
-
-    # Copy reference materials if source exists
-    if source_reference_path.exists():
-        for item in source_reference_path.iterdir():
-            dest = reference_path / item.name
-            if item.is_dir():
-                if dest.exists():
-                    shutil.rmtree(dest)
-                shutil.copytree(item, dest)
-            else:
-                shutil.copy2(item, dest)
-        print(f"  Copied reference materials from: {source_reference_path}")
-    else:
-        print(f"  Warning: Reference materials not found at: {source_reference_path}")
-        # Create placeholder files
-        (reference_path / "sql-style-guide.md").write_text("# SQL Style Guide\n\nAdd SQL formatting standards here.\n")
-        (reference_path / "testing-patterns.md").write_text("# Testing Patterns\n\nAdd dbt testing patterns here.\n")
 
 
 def generate_dbt_project_yml(config: dict) -> str:
@@ -383,13 +359,9 @@ data_pipeline:
   # dbt project location
   folder: "3 - Data Pipeline"
 
-agents:
-  # Agent definitions location
-  folder: "6 - Agentic Resources/Agents"
-
-skills:
-  # Skills location
-  folder: "6 - Agentic Resources/Skills"
+data_exports:
+  # Query results and validation outputs
+  folder: "6 - Data Exports"
 """
 
 
@@ -659,8 +631,7 @@ The setup script creates a single virtual environment at the project root (`.ven
 │   └── profiles.yml.example       # Template for profiles.yml
 ├── 4 - Semantic Layer/            # Power BI TMDL files
 ├── 5 - Report Building/           # Power BI reports
-├── 6 - Agentic Resources/         # Reference materials
-└── 7 - Data Exports/              # Query results
+└── 6 - Data Exports/              # Query results
 ```
 
 ## Usage After Setup
@@ -810,8 +781,8 @@ Thumbs.db
 desktop.ini
 
 # Project specific
-7 - Data Exports/*.csv
-7 - Data Exports/*.json
+6 - Data Exports/*.csv
+6 - Data Exports/*.json
 
 # Claude Code temporary files
 tmpclaude-*-cwd
@@ -1074,15 +1045,7 @@ def main():
     data_pipeline_path = target_path / "3 - Data Pipeline"
     create_dbt_structure(data_pipeline_path)
 
-    # Step 3: Create agentic resources
-    print("\nCreating agentic resources...")
-    agentic_path = target_path / "6 - Agentic Resources"
-    # Look for reference materials in the skill's parent repo
-    script_dir = Path(__file__).parent
-    source_reference = script_dir.parent.parent.parent / "Agents" / "reference"
-    create_agentic_resources(agentic_path, source_reference)
-
-    # Step 4: Generate configuration files
+    # Step 3: Generate configuration files
     print("\nGenerating configuration files...")
 
     # dbt_project.yml
@@ -1128,12 +1091,12 @@ def main():
     (claude_dir / "settings.local.json").write_text(generate_settings_local_json(), encoding='utf-8')
     print("  Created: .claude/settings.local.json (auto-allows skills and safe bash commands)")
 
-    # Step 5: Run setup script (optional)
+    # Step 4: Run setup script (optional)
     if not args.skip_venv and not args.skip_deps:
         print("\nSetting up Python environment...")
         setup_success = run_setup_script(target_path, args.skip_venv)
 
-        # Step 6: Run dbt deps to install packages
+        # Step 5: Run dbt deps to install packages
         if setup_success:
             run_dbt_deps(target_path)
     else:

@@ -1,6 +1,6 @@
 ---
 name: sql-server-reader
-description: Read metadata and query data from local SQL Server database. List tables, inspect schemas, execute SELECT queries. Results exported as CSV to "7 - Data Exports". Use for data validation, debugging, and sample data inspection during development. Read-only operations - no writes permitted.
+description: Read metadata and query data from local SQL Server database. List tables, inspect schemas, execute SELECT queries. Results exported as CSV to "6 - Data Exports". Use for data validation, debugging, and sample data inspection during development. Read-only operations - no writes permitted.
 allowed-tools: Bash Read Glob
 ---
 
@@ -17,7 +17,7 @@ This skill provides read-only access to SQL Server tables, enabling agents to:
 - Validate data during dbt development
 - Debug data issues and inspect sample records
 
-All query results are automatically saved to `7 - Data Exports/` as CSV files.
+All query results are automatically saved to `6 - Data Exports/` as CSV files.
 
 ## Connection Details
 
@@ -37,7 +37,7 @@ The skill is invoked through the Python script located in `scripts/query_sql_ser
 python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --list-tables
 ```
 
-**Output**: Displays table names and saves list to `7 - Data Exports/table_list.csv`
+**Output**: Displays table names and saves list to `6 - Data Exports/table_list.csv`
 
 ### Get schema for a specific table
 
@@ -52,7 +52,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.
 
 **Output**: 
 - Column names, data types, nullability, keys
-- Saves schema to `7 - Data Exports/schema_TABLE_NAME.csv`
+- Saves schema to `6 - Data Exports/schema_TABLE_NAME.csv`
 
 ### Execute a SELECT query
 
@@ -62,7 +62,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.
 
 **Output**: 
 - Query results displayed in terminal
-- Saves to `7 - Data Exports/query_results_TIMESTAMP.csv`
+- Saves to `6 - Data Exports/query_results_TIMESTAMP.csv`
 
 ### Execute query from file
 
@@ -71,7 +71,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.
 ```
 
 **Output**: 
-- Results saved to `7 - Data Exports/query_results_TIMESTAMP.csv`
+- Results saved to `6 - Data Exports/query_results_TIMESTAMP.csv`
 
 ### Export specific table to CSV
 
@@ -84,7 +84,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.
 python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --export customers
 ```
 
-**Output**: Full table export to `7 - Data Exports/TABLE_NAME_TIMESTAMP.csv`
+**Output**: Full table export to `6 - Data Exports/TABLE_NAME_TIMESTAMP.csv`
 
 ### Limit result rows
 
@@ -141,7 +141,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.
 # Export staging transformation
 python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --export stg_erp__customers --limit 1000
 
-# Compare CSV files in 7 - Data Exports/
+# Compare CSV files in 6 - Data Exports/
 ```
 
 ## Safety Features
@@ -166,7 +166,7 @@ The script validates queries before execution:
 
 All exports are saved to:
 ```
-7 - Data Exports/
+6 - Data Exports/
 ├── table_list.csv
 ├── schema_TABLE_NAME.csv
 ├── query_results_20260111_143022.csv
@@ -352,7 +352,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.
 - Use least-privilege account (read-only access only)
 
 ### Data Exports
-- Clean up old CSV files regularly (7 - Data Exports/)
+- Clean up old CSV files regularly (6 - Data Exports/)
 - Use meaningful query filenames with `--output`
 - Document complex queries in .sql files
 - Add .csv files to .gitignore

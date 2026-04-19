@@ -157,7 +157,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --fi
 **Custom Location**:
 - Use `--output-dir` to specify alternative location
 - Useful for temporary analysis or agent-specific workflows
-- Example: `--output-dir "7 - Data Exports"` for transient data
+- Example: `--output-dir "6 - Data Exports"` for transient data
 
 ## CSV Type Inference
 

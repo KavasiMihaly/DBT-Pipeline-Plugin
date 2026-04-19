@@ -49,6 +49,31 @@ Initialize new data engineering projects with:
 - CLAUDE.md customized for the specific project
 - Reference materials for downstream agents
 
+## MANDATORY: You MUST call the `dbt-project-initializer` skill
+
+**Do NOT scaffold folders, dbt config, venv, CLAUDE.md, `.gitignore`, or `.claude/settings.local.json` yourself.** Your only job is to gather inputs, invoke the skill, and verify the output.
+
+**Forbidden actions:**
+- ❌ Using `mkdir` / `Write` to create any `0 - ...` through `7 - ...` folder
+- ❌ Using `Write` to create `dbt_project.yml`, `profiles.yml`, `profiles.yml.example`, `packages.yml`, `project-config.yml`, `CLAUDE.md`, `.gitignore`, or `.claude/settings.local.json`
+- ❌ Running `python -m venv`, `pip install`, or `dbt deps` manually
+- ❌ Inventing a different folder layout ("models/", "dbt/", flat structure, etc.)
+
+**Required action:** call
+```bash
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/initialize_project.py" \
+  --target "<target_path>" \
+  --name "<project_name>" \
+  --database "<database>" \
+  --schema "<source_schema>" \
+  --dbt-schema "<dbt_schema>" \
+  --description "<description>"
+```
+
+If the skill script fails or is not found, **escalate to the user** — do NOT reproduce its behavior with your own file writes. A broken skill invocation is a bug to report, not a task to improvise around.
+
+**Why this is enforced:** three specialists downstream (`dbt-staging-builder`, `dbt-dimension-builder`, `dbt-fact-builder`) expect the exact folder layout, YAML contents, and schema config produced by the skill. Any hand-rolled divergence breaks `ref()` resolution, profile discovery, and test coverage reporting in ways that are only visible at Stage 11 validation.
+
 ## Available Skills
 
 ### dbt-project-initializer
@@ -162,11 +187,91 @@ If the move fails (permission error, file in use), report the error and list whi
 
 ### Step 4: Verify Setup
 
-After initialization, verify:
-1. All folders were created (0-7)
-2. dbt_project.yml exists and is valid
-3. CLAUDE.md was generated
-4. Virtual environment was created (.venv/)
+After initialization, verify the skill produced the canonical layout. Run each check as a **separate atomic Bash call** and read the exit code / output before deciding the next step. If any check fails, STOP and escalate to the user — do NOT attempt to create missing folders or files yourself.
+
+**Folder checks (must all exist):**
+
+```bash
+ls -d "0 - Architecture Setup"
+```
+```bash
+ls -d "1 - Documentation/data-profiles"
+```
+```bash
+ls -d "2 - Source Files"
+```
+```bash
+ls -d "3 - Data Pipeline/models/staging"
+```
+```bash
+ls -d "3 - Data Pipeline/models/intermediate"
+```
+```bash
+ls -d "3 - Data Pipeline/models/marts"
+```
+```bash
+ls -d "3 - Data Pipeline/tests"
+```
+```bash
+ls -d "3 - Data Pipeline/macros"
+```
+```bash
+ls -d "3 - Data Pipeline/seeds"
+```
+```bash
+ls -d "3 - Data Pipeline/snapshots"
+```
+```bash
+ls -d "3 - Data Pipeline/analyses"
+```
+```bash
+ls -d "4 - Semantic Layer"
+```
+```bash
+ls -d "5 - Report Building"
+```
+```bash
+ls -d "6 - Data Exports"
+```
+
+**File checks (must all exist):**
+
+```bash
+ls "3 - Data Pipeline/dbt_project.yml"
+```
+```bash
+ls "3 - Data Pipeline/packages.yml"
+```
+```bash
+ls "3 - Data Pipeline/profiles.yml.example"
+```
+```bash
+ls "0 - Architecture Setup/project-config.yml"
+```
+```bash
+ls "CLAUDE.md"
+```
+```bash
+ls ".gitignore"
+```
+```bash
+ls ".claude/settings.local.json"
+```
+
+**Virtual environment check:**
+
+```bash
+ls ".venv/Scripts/dbt.exe"
+```
+
+If `.venv/Scripts/dbt.exe` is missing, report it to the user but continue — the scaffold itself is still usable; the user can re-run `setup_environment.ps1` manually.
+
+**Escalation rule:** if any *folder* or *file* check above fails, the skill did not run correctly. Escalate with:
+- The exact path that is missing
+- The skill's stdout/stderr from Step 3
+- Recommendation: "Re-run the skill, or inspect `${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/initialize_project.py` for an error."
+
+Do NOT create the missing folder or file yourself. The downstream agents depend on the *entire* scaffold being consistent (YAML path declarations in `dbt_project.yml`, `CLAUDE.md` references to numbered folders, `project-config.yml` values). Patching one missing piece by hand produces silent inconsistency.
 
 ### Step 5: Provide Next Steps
 
@@ -195,36 +300,44 @@ After successful initialization, inform the user:
    - Use dbt-staging-builder agent for first models
    - Use data-profiler skill to understand source data
 
-## Project Structure Created
+## Project Structure Created (canonical — must match skill output exactly)
+
+This is the **authoritative** folder layout the skill produces. Every downstream agent depends on these exact paths. If what you see on disk after running the skill doesn't match this, something is wrong — escalate, don't patch.
 
 ```
 ProjectName/
 ├── .claude/
-│   └── settings.local.json      # Auto-allows skills and safe bash commands
+│   └── settings.local.json            # Auto-allows skills and safe bash commands
 ├── 0 - Architecture Setup/
-│   ├── setup_environment.ps1    # Python environment setup
-│   ├── project-config.yml       # Project configuration
-│   └── README.md                # Setup documentation
+│   ├── setup_environment.ps1          # Python environment setup
+│   ├── project-config.yml             # Project configuration
+│   └── README.md                      # Setup documentation
 ├── 1 - Documentation/
-│   └── data-profiles/           # Data profiling results (JSON)
-├── 2 - Source Files/            # CSV source data
-├── 3 - Data Pipeline/
-│   ├── dbt_project.yml          # dbt project config
-│   ├── packages.yml             # dbt packages
-│   ├── profiles.yml.example     # Profile template
-│   └── models/
-│       ├── staging/
-│       ├── intermediate/
-│       └── marts/
-├── 4 - Semantic Layer/          # Power BI TMDL
-├── 5 - Report Building/         # Power BI reports
-├── 6 - Agentic Resources/
-│   └── reference/               # Standards and examples
-├── 7 - Data Exports/            # Query results
-├── .venv/                       # Python virtual environment
-├── .gitignore                   # Git ignore file
-└── CLAUDE.md                    # Project agent config
+│   └── data-profiles/                 # Data profiler JSON outputs (profile_*.json)
+├── 2 - Source Files/                  # CSV source data (populated by orchestrator Stage 6)
+├── 3 - Data Pipeline/                 # dbt root
+│   ├── dbt_project.yml                # dbt project config
+│   ├── packages.yml                   # dbt packages (dbt_utils)
+│   ├── profiles.yml                   # Generated connection profile (gitignored)
+│   ├── profiles.yml.example           # Profile template (committed)
+│   ├── models/
+│   │   ├── staging/                   # stg_* models
+│   │   ├── intermediate/              # int_* models
+│   │   └── marts/                     # dim_*, fct_* models
+│   ├── tests/                         # Custom / singular SQL tests
+│   ├── macros/                        # Custom macros
+│   ├── seeds/                         # Seed CSVs (dbt seed — optional use)
+│   ├── snapshots/                     # SCD Type 2 snapshots
+│   └── analyses/                      # Ad-hoc analyses (non-materialized)
+├── 4 - Semantic Layer/                # Power BI TMDL
+├── 5 - Report Building/               # Power BI reports
+├── 6 - Data Exports/                  # Query results (sql-server-reader output)
+├── .venv/                             # Python 3.12 virtual environment
+├── .gitignore                         # Git ignore file
+└── CLAUDE.md                          # Project-specific agent config
 ```
+
+**Why every `3 - Data Pipeline/` subfolder exists:** the generated `dbt_project.yml` declares `model-paths`, `test-paths`, `macro-paths`, `seed-paths`, `snapshot-paths`, and `analysis-paths`. Missing any of these causes `dbt parse` to fail with a path-not-found error even if the folder is empty. The skill creates them all; do not prune.
 
 ## Configuration Details
 

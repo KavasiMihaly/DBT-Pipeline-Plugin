@@ -335,7 +335,6 @@ Task(skill="sql-executor",
 
 ---
 
-**Location**: `6 - Agentic Resources/Skills/sql-executor/`
 **Primary Script**: `scripts/load_data.py`
 **Use Cases**: Data loading, test data preparation, database management
 **Status**: Implemented
