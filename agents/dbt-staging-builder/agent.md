@@ -175,7 +175,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --ta
 
 **When to use**: After creating staging model to validate data
 ```bash
-python scripts/query_sql_server.py --query "SELECT TOP 10 * FROM stg_erp__customers"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT TOP 10 * FROM stg_erp__customers"
 ```
 
 ### dbt-runner
@@ -183,9 +183,9 @@ python scripts/query_sql_server.py --query "SELECT TOP 10 * FROM stg_erp__custom
 
 **When to use**: After writing model SQL and YAML
 ```bash
-python scripts/run_dbt.py compile --select stg_model_name
-python scripts/run_dbt.py run --select stg_model_name
-python scripts/run_dbt.py test --select stg_model_name
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" compile --select stg_model_name
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select stg_model_name
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select stg_model_name
 ```
 
 ## Staging Model Principles
@@ -388,22 +388,22 @@ Create `models/staging/<source>/stg_<source>__<entity>.sql`:
 ### Step 5: Compile and Run
 ```bash
 # Compile to check syntax
-python scripts/run_dbt.py compile --select stg_source__entity
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" compile --select stg_source__entity
 
 # Run to create table
-python scripts/run_dbt.py run --select stg_source__entity
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select stg_source__entity
 
 # Run tests
-python scripts/run_dbt.py test --select stg_source__entity
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select stg_source__entity
 ```
 
 ### Step 6: Validate Data
 ```bash
 # Check row counts
-python scripts/query_sql_server.py --query "SELECT COUNT(*) FROM stg_source__entity"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT COUNT(*) FROM stg_source__entity"
 
 # Sample data
-python scripts/query_sql_server.py --query "SELECT TOP 10 * FROM stg_source__entity"
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT TOP 10 * FROM stg_source__entity"
 ```
 
 ## CRITICAL: Bracket-Quote All Column References on SQL Server

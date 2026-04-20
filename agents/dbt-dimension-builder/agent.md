@@ -221,9 +221,9 @@ Minimum tests:
 
 ### Step 5: Compile, Run, Test
 ```bash
-python scripts/run_dbt.py compile --select dim_model
-python scripts/run_dbt.py run --select dim_model
-python scripts/run_dbt.py test --select dim_model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" compile --select dim_model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select dim_model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select dim_model
 ```
 
 ## Attribute Organization

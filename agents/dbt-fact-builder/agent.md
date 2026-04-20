@@ -220,9 +220,9 @@ Minimum tests:
 
 ### Step 5: Compile, Run, Test
 ```bash
-python scripts/run_dbt.py compile --select fct_model
-python scripts/run_dbt.py run --select fct_model
-python scripts/run_dbt.py test --select fct_model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" compile --select fct_model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" run --select fct_model
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select fct_model
 ```
 
 ## Incremental Logic

@@ -310,13 +310,13 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --selec
 python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test
 
 # Test specific layer
-python scripts/run_dbt.py test --select staging.*
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --select staging.*
 ```
 
 ### Step 4: Analyze Coverage
 ```bash
 # Use dbt-test-coverage-analyzer skill
-python scripts/analyze_test_coverage.py
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py"
 ```
 
 ## Test Coverage Target

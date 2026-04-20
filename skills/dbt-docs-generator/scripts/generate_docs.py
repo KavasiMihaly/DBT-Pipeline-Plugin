@@ -113,7 +113,7 @@ class DBTDocsGenerator:
             print("SUCCESS: Documentation generated")
             print("")
             print("Next steps:")
-            print("  View docs: python scripts/generate_docs.py serve")
+            print('  View docs: python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" serve')
             print("  Or open:   target/index.html")
 
             return True
@@ -139,7 +139,7 @@ class DBTDocsGenerator:
         if not self._docs_exist():
             print("ERROR: Documentation not found", file=sys.stderr)
             print("Please run 'generate' command first", file=sys.stderr)
-            print("  python scripts/generate_docs.py generate", file=sys.stderr)
+            print('  python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-docs-generator/scripts/generate_docs.py" generate', file=sys.stderr)
             return False
 
         # Build command

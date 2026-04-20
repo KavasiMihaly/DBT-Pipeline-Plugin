@@ -6,18 +6,65 @@ Generic CSV loading for any source data files.
 """
 
 import argparse
+import json
 import sys
 import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Union, Literal
+from typing import Optional, List, Dict, Any, Union, Literal, Tuple
 import glob
 
 import pandas as pd
 import pyodbc
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.engine import URL
+
+
+def _profile_safe_name(csv_path: Union[str, Path]) -> str:
+    """Mirror the profiler's filename normalization (profile_data.py:1240-1241)
+    so the loader looks up the same sibling profile the profiler wrote.
+    """
+    stem = Path(csv_path).stem
+    return stem.replace('.', '__').replace(' ', '_').replace('-', '_').lower()
+
+
+def _find_sibling_profile(csv_path: Union[str, Path]) -> Optional[Path]:
+    """Look for a profile JSON the data-profiler wrote for this CSV.
+
+    Searches CWD first, then walks up a few levels, matching the loader's
+    own project-root discovery strategy. Returns the JSON path if found,
+    or None.
+    """
+    safe_name = _profile_safe_name(csv_path)
+    profile_filename = f"profile_{safe_name}.json"
+    rel = Path('1 - Documentation') / 'data-profiles' / profile_filename
+
+    cwd = Path.cwd()
+    candidates = [cwd] + list(cwd.parents)[:5]
+    for base in candidates:
+        candidate = base / rel
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _read_profile_header(profile_path: Path) -> Tuple[str, bool, Optional[List[str]]]:
+    """Return (status, verified, column_names) from a profile JSON.
+
+    - status: 'present' | 'missing' | 'ambiguous' (profiler's header.status)
+    - verified: whether business-analyst has confirmed the names
+    - column_names: list of column_name values in ordinal order (for headerless loads)
+    """
+    with open(profile_path, 'r', encoding='utf-8') as f:
+        profile = json.load(f)
+
+    header = profile.get('header', {}) or {}
+    status = header.get('status', 'present')
+    verified = bool(header.get('verified', False))
+    column_names = [c.get('column_name') for c in profile.get('columns', [])]
+    column_names = [c for c in column_names if c]
+    return status, verified, column_names or None
 
 
 def _load_plugin_userconfig_env():
@@ -318,11 +365,14 @@ class SQLExecutor:
         if_exists: Literal['fail', 'replace', 'append'] = 'fail',
         truncate: bool = False,
         chunksize: Optional[int] = None,
-        dtype: Optional[Dict[str, Any]] = None
+        dtype: Optional[Dict[str, Any]] = None,
+        no_header: bool = False,
+        columns: Optional[List[str]] = None,
+        force_raw_load: bool = False
     ) -> int:
         """
         Load CSV file into SQL Server table.
-        
+
         Args:
             csv_path: Path to CSV file (relative to source_dir or absolute)
             table_name: Target table name (without schema prefix)
@@ -331,27 +381,67 @@ class SQLExecutor:
             truncate: Truncate table before loading (overrides if_exists)
             chunksize: Read CSV in chunks (for large files)
             dtype: Dict of column dtypes to enforce
-            
+            no_header: Treat CSV as headerless (pandas header=None)
+            columns: Explicit column names to use when no_header=True or when
+                     overriding a sibling profile. Length must match CSV width.
+            force_raw_load: Bypass the unverified-header fail-fast gate. Use only
+                     when you accept that row 0 data may be consumed as headers.
+
         Returns:
             Number of rows loaded
         """
         if self.engine is None:
             raise RuntimeError("Not connected to database. Call connect() first.")
-        
+
         start_time = datetime.now()
-        
+
         # Resolve CSV path
         if not Path(csv_path).is_absolute():
             csv_path = self.source_dir / csv_path
         else:
             csv_path = Path(csv_path)
-        
+
         if not csv_path.exists():
             raise FileNotFoundError(f"CSV file not found: {csv_path}")
-        
+
         self._log(f"Loading CSV: {csv_path}")
         self._log(f"Target table: {schema}.{table_name}")
-        
+
+        # Header resolution — consult sibling profile if caller didn't override.
+        # Precedence: explicit CLI args (no_header/columns) > sibling profile > pandas default.
+        read_csv_kwargs: Dict[str, Any] = {'low_memory': False}
+        if columns is not None or no_header:
+            read_csv_kwargs['header'] = None
+            if columns is not None:
+                read_csv_kwargs['names'] = columns
+            self._log(f"Header mode: explicit CLI override (no_header={no_header}, columns={'provided' if columns else 'pandas-auto'})")
+        else:
+            profile_path = _find_sibling_profile(csv_path)
+            if profile_path is not None:
+                try:
+                    status, verified, profile_cols = _read_profile_header(profile_path)
+                except Exception as e:
+                    self._log(f"Could not read sibling profile {profile_path}: {e}. Falling back to pandas default.", "WARNING")
+                    status, verified, profile_cols = 'present', True, None
+
+                if status == 'present':
+                    self._log(f"Sibling profile confirms header row present: {profile_path.name}")
+                elif verified and profile_cols:
+                    self._log(f"Sibling profile reports status={status} with verified names — loading headerless with {len(profile_cols)} profile-supplied columns", "SUCCESS")
+                    read_csv_kwargs['header'] = None
+                    read_csv_kwargs['names'] = profile_cols
+                elif force_raw_load:
+                    self._log(f"Sibling profile reports status={status}, verified={verified}, but --force-raw-load was set. Proceeding with pandas default; row 0 of data will be consumed as headers.", "WARNING")
+                else:
+                    raise RuntimeError(
+                        f"Refusing to load: sibling profile {profile_path.name} reports header.status='{status}' "
+                        f"and header.verified={verified}. Column names are synthetic placeholders. "
+                        f"Run business-analyst to verify headers (per I-039 workflow), then retry. "
+                        f"Or pass --columns 'a,b,c' / --no-header / --force-raw-load to override."
+                    )
+            else:
+                self._log(f"No sibling profile found at 1 - Documentation/data-profiles/profile_{_profile_safe_name(csv_path)}.json — using pandas default header inference")
+
         # Create schema if needed
         self.create_schema_if_not_exists(schema)
         
@@ -375,7 +465,7 @@ class SQLExecutor:
             self._log(f"Using chunked reading (chunksize={chunksize})")
             total_rows = 0
 
-            for i, chunk in enumerate(pd.read_csv(csv_path, chunksize=chunksize, low_memory=False)):
+            for i, chunk in enumerate(pd.read_csv(csv_path, chunksize=chunksize, **read_csv_kwargs)):
                 # Sanitize column names on first chunk
                 if i == 0:
                     chunk = sanitize_dataframe_columns(chunk, verbose=self.verbose)
@@ -400,7 +490,7 @@ class SQLExecutor:
             rows_loaded = total_rows
         else:
             # Read entire file at once
-            df = pd.read_csv(csv_path, low_memory=False)
+            df = pd.read_csv(csv_path, **read_csv_kwargs)
             self._log(f"CSV loaded: {len(df):,} rows, {len(df.columns)} columns")
 
             # Sanitize column names for SQL Server compatibility
@@ -463,7 +553,9 @@ class SQLExecutor:
         pattern: str,
         table_prefix: str,
         schema: str = 'raw',
-        if_exists: Literal['fail', 'replace', 'append'] = 'replace'
+        if_exists: Literal['fail', 'replace', 'append'] = 'replace',
+        no_header: bool = False,
+        force_raw_load: bool = False
     ) -> Dict[str, int]:
         """
         Load multiple CSV files matching a pattern.
@@ -501,7 +593,9 @@ class SQLExecutor:
                     csv_path=csv_file,
                     table_name=table_name,
                     schema=schema,
-                    if_exists=if_exists
+                    if_exists=if_exists,
+                    no_header=no_header,
+                    force_raw_load=force_raw_load
                 )
                 results[f"{schema}.{table_name}"] = rows
             except Exception as e:
@@ -542,6 +636,11 @@ def main():
     parser.add_argument('--execute', help='Execute SQL statement')
     parser.add_argument('--sql-file', help='Execute SQL from file')
     
+    # Header handling (I-046)
+    parser.add_argument('--no-header', action='store_true', help='Treat CSV as headerless (pandas header=None). Use with --columns.')
+    parser.add_argument('--columns', help='Comma-separated column names to use when CSV has no header (e.g., "id,name,date")')
+    parser.add_argument('--force-raw-load', action='store_true', help='Bypass the unverified-header fail-fast gate. Row 0 may be consumed as headers.')
+
     # Other options
     parser.add_argument('--quiet', action='store_true', help='Suppress output')
     parser.add_argument('--chunksize', type=int, help='Read CSV in chunks (for large files)')
@@ -579,41 +678,49 @@ def main():
         else:
             if_exists = 'fail'
         
+        # Parse --columns CSV list once for downstream calls
+        columns_override = [c.strip() for c in args.columns.split(',')] if args.columns else None
+
         # Execute requested operation
         if args.pattern:
             # Load files matching pattern
             if not args.table_prefix:
                 executor._log("--table-prefix required when using --pattern", "ERROR")
                 sys.exit(1)
-            
+
             results = executor.load_pattern(
                 pattern=args.pattern,
                 table_prefix=args.table_prefix,
                 schema=args.schema,
-                if_exists=if_exists
+                if_exists=if_exists,
+                no_header=args.no_header,
+                force_raw_load=args.force_raw_load
             )
             sys.exit(0 if all(r >= 0 for r in results.values()) else 1)
-            
+
         elif args.file:
             # Load single file
             if not args.table:
                 executor._log("--table required when using --file", "ERROR")
                 sys.exit(1)
-            
+
             # Parse table name (handle schema.table format)
             if '.' in args.table:
                 schema, table = args.table.split('.', 1)
             else:
                 schema = args.schema
                 table = args.table
-            
+
             rows = executor.load_csv_to_table(
                 csv_path=args.file,
                 table_name=table,
                 schema=schema,
                 if_exists=if_exists,
                 truncate=args.truncate,
-                chunksize=args.chunksize
+                chunksize=args.chunksize,
+                no_header=args.no_header,
+                columns=columns_override,
+                force_raw_load=args.force_raw_load
             )
             sys.exit(0)
             

@@ -10,7 +10,8 @@
       "Bash(cat)",
       "Bash(PYTHONIOENCODING=utf-8 python \"C:/Users/kavas/Documents/GitHub/DBT Pipeline Plugin/skills/pbip-from-dbt/scripts/build_pbip.py\" --output \"4 - Semantic Layer\" --name \"Sales Analytics\" --verbose)",
       "Bash(PYTHONIOENCODING=utf-8 python \"C:/Users/kavas/Documents/GitHub/DBT Pipeline Plugin/skills/pbip-from-dbt/scripts/build_pbip.py\" --output \"4 - Semantic Layer\" --name \"Empty\" --design-file \"1 - Documentation/pipeline-design-empty.md\" --server \"x\" --database \"y\")",
-      "Bash(echo \"exit=$?\")"
+      "Bash(echo \"exit=$?\")",
+      "Bash(python *)"
     ]
   }
 }
