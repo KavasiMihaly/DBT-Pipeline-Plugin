@@ -38,8 +38,23 @@ This document contains:
 - **Section 4: Architecture** — schemas, database
 - **Section 5: Staging Plan** — read before using `ref()` to any staging model
 - **Section 6: Dimension Plan** — read before defining foreign keys to dimensions
+- **Section 7: Fact Plan** — read the row for YOUR fact (binding spec for what to build)
+- **Section 8: Semantic Layer Plan** — especially 8.3 (conformed keys) and 8.5 (measures); the user-facing contract your fact must support
 
 Design decisions documented there are binding. Do not contradict earlier decisions without noting it in your completion summary.
+
+## Step 0: Verify prompt parameters against Section 7 and Section 8
+
+**Before writing any SQL**, compare the parameters the orchestrator passed in your prompt (grain, FKs, measures, incremental strategy) against your fact's row in Section 7 AND the conformed-keys spec in Section 8.3. They must match.
+
+Then check:
+- Every specified FK has a corresponding dim built (check Section 11 Created Objects Registry → Dimensions) and the conformed surrogate-key formula from Section 8.3 will produce matching keys
+- Every specified measure corresponds to a numeric column in the source staging model (check profile JSON for the `data_type` field)
+- The grain you were told to implement matches what the source data supports (e.g., "one row per order" requires `order_id` to be PK-unique in staging)
+
+If there is any mismatch — prompt vs. Section 7, prompt vs. Section 8.3 conformed keys, or prompt vs. available source columns — **do NOT silently build a degraded fact**. Complete the build with what you CAN satisfy, then set `conforms_to_plan: false` in your JSON completion envelope and list every mismatch in the `deviations[]` array. The orchestrator will halt, escalate to the user, and either accept the deviation (updating Sections 7 and 8) or abort.
+
+This is a hard rule. A fact that silently loses a measure or a FK breaks the semantic contract users approved at Stage 4 — and the cost is only caught when the Power BI report shows blank values. Fail fast here, with full context.
 
 ## CRITICAL: Mart Schema is NOT `dbo`
 
@@ -303,6 +318,8 @@ When invoked by `dbt-pipeline-orchestrator`, return a JSON envelope in addition 
   "model": "{model_name}",
   "model_file": "{path}",
   "schema_file": "{path}",
+  "conforms_to_plan": true,
+  "deviations": [],
   "design_decisions": {
     "grain": "{one row per ...}",
     "foreign_keys": [],
@@ -322,6 +339,24 @@ When invoked by `dbt-pipeline-orchestrator`, return a JSON envelope in addition 
   "warnings": []
 }
 ```
+
+### `conforms_to_plan` and `deviations` — how to set them (per Step 0)
+
+- **`conforms_to_plan: true`** — prompt parameters matched Section 7 AND Section 8.3 conformed keys AND every specified measure/FK was successfully built from available source columns at the specified grain. `deviations` is `[]`.
+- **`conforms_to_plan: false`** — any of: a specified measure was missing or wrong-typed, an FK dim doesn't exist or uses a different surrogate-key formula from Section 8.3, grain couldn't be enforced (duplicate rows at the declared grain), or prompt parameters diverged from Section 7. Fill `deviations[]` with structured entries:
+
+```json
+"deviations": [
+  {
+    "type": "missing_measure" | "missing_fk" | "grain_violation" | "measure_type_mismatch" | "conformed_key_mismatch" | "prompt_vs_section7_mismatch",
+    "expected": "{what the prompt/Section 7/Section 8.3 said}",
+    "actual": "{what was built or found}",
+    "impact": "{one-line consequence for the semantic model}"
+  }
+]
+```
+
+The orchestrator gates the pipeline on this: any non-empty `deviations` array halts progression to Stage 10 until the user explicitly accepts the deviation or aborts. The goal is: **no silent degradation between the semantic contract at Stage 4 and the fact table that lands in the warehouse**.
 
 The orchestrator uses this envelope to update the master pipeline-design.md document.
 

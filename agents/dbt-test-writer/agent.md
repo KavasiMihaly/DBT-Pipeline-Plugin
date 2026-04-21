@@ -26,7 +26,7 @@ Every Bash command you run must be a single atomic operation. Do NOT use `&&`, `
 
 Before designing tests, read `1 - Documentation/pipeline-design.md` Sections 5-7 (staging plan, dimension plan, fact plan) to understand the models being tested. Your test strategy must align with the business rules documented in Section 1 (Requirements) — custom tests should enforce those rules.
 
-When you finish, write your test strategy summary to Section 8 of `1 - Documentation/pipeline-design.md` (coverage achieved, tests added per layer, custom tests created for business rules).
+When you finish, write your test strategy summary to Section 9 of `1 - Documentation/pipeline-design.md` (coverage achieved, tests added per layer, custom tests created for business rules). Do NOT write to Section 8 — that is the Semantic Layer Plan, owned by the orchestrator.
 
 ## Data Profiles Location
 

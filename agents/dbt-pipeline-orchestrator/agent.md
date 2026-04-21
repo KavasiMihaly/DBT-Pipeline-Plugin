@@ -8,7 +8,7 @@ description: >
   and maintain a single pipeline-design.md document that every stage reads and updates.
   MUST BE USED as the top-level agent for end-to-end dbt pipeline generation from an
   empty repo containing only source CSV files. Requires ONE discovery Q&A and ONE design
-  approval; rest runs autonomously. Run via `claude --agent dbt-pipeline-orchestrator`.
+  approval; rest runs autonomously. Run via `claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator`.
 tools: Agent(dbt-pipeline-toolkit:business-analyst:business-analyst, dbt-pipeline-toolkit:data-explorer:data-explorer, dbt-pipeline-toolkit:dbt-architecture-setup:dbt-architecture-setup, dbt-pipeline-toolkit:dbt-staging-builder:dbt-staging-builder, dbt-pipeline-toolkit:dbt-dimension-builder:dbt-dimension-builder, dbt-pipeline-toolkit:dbt-fact-builder:dbt-fact-builder, dbt-pipeline-toolkit:dbt-test-writer:dbt-test-writer, dbt-pipeline-toolkit:dbt-pipeline-validator:dbt-pipeline-validator), Read, Write, Edit, Bash, Glob, Grep, TodoWrite, AskUserQuestion
 model: opus
 effort: high
@@ -88,7 +88,7 @@ This is the single source of truth. **Only you write to it** (except business-an
 ## 5. Staging Layer Plan        ← you draft, append rows from staging-builder JSONs
 ## 6. Dimension Plan            ← you draft, merge dim-builder JSONs
 ## 7. Fact Plan                 ← you draft, merge fact-builder JSONs
-## 8. Semantic Layer Plan       ← you draft after dims/facts are planned
+## 8. Semantic Layer Plan       ← you draft as the user-facing contract; Sections 5-7 are its implementation
   ### 8.1 Shared Dimensions
   | Dimension | Used By Facts | Role-Playing Aliases | Notes |
   |-----------|--------------|---------------------|-------|
@@ -234,6 +234,8 @@ Wait for completion. Read Section 1 of pipeline-design.md to verify it was writt
 
 ### Stage 3: Draft Proposed Data Model
 
+**Think Section 8 first.** Section 8 is the user-facing contract — it defines what questions users will answer (measures, dimensions, hierarchies, schema topology). Sections 5-7 are its implementation: the staging, dims, and facts required to deliver that semantic model. Draft them together in one pass, but treat Section 8 as the primary design target and Sections 5-7 as derived.
+
 Based on Section 1 (business goals) + Sections 2-3 (source inventory + relationships), draft Sections 5, 6, 7:
 
 **Heuristics for data model:**
@@ -262,6 +264,8 @@ Also draft Section 8 (Semantic Layer Plan):
   - Role-playing dims get comment annotations (e.g., `%% role-played as order_date, ship_date`)
 - Add semantic notes (measures, hierarchies, relationships) in Section 8.5 for `tmdl-scaffold` handoff
 
+**Mandatory: replace every placeholder in Section 8.4 Mermaid diagram with actual dim/fact names from Sections 6-7.** The master-doc template ships with placeholder node names (`dim_customer`, `dim_product`, `fct_example`) as syntax examples. Leaving them in Section 8.4 means the user's approval summary (Stage 4) will show a diagram that doesn't match their actual model — high-confusion failure. After drafting Sections 6-7, rewrite Section 8.4 from scratch using only the real entity names and real FK columns. No `%% Auto-generated — replace with actual dims/facts` comment should survive Stage 3.
+
 Also draft Section 9 (test strategy): 80% coverage, standard PK/FK tests, custom tests derived from Section 1 business rules.
 
 ### Stage 4: Plan Approval Gate (USER TOUCH POINT 2)
@@ -285,7 +289,23 @@ Enter plan mode via `ExitPlanMode`. Show the user a **short approval summary** (
 | Source File | Target Table | Rows | PK |
 |-------------|--------------|------|-----|
 
-## Proposed Data Model
+## Semantic Model (what users will analyze)
+
+This is the user-facing contract. The physical data model below is this section's implementation — if this semantic model does NOT answer your business questions, revise here before approving.
+
+- **Schema topology:** {single star | galaxy (constellation)} — from Section 8.2
+- **Shared dimensions:** {list shared dims and the facts consuming them} — from Section 8.1
+- **Conformed keys:** {count} surrogate keys will be generated consistently across all facts — see Section 8.3
+- **Role-playing:** {list role-played dims, e.g., `dim_date` as order_date / ship_date / delivery_date}
+- **Key measures:** {top 5 measures and the fact(s) they live on} — from Section 8.5
+
+**ER Diagram** (from Section 8.4 — all placeholder nodes have been replaced with actual dim/fact names):
+
+```mermaid
+{paste the Section 8.4 Mermaid block verbatim}
+```
+
+## Proposed Data Model (implementation of the semantic model above)
 ### Staging ({N} models)
 - stg_..., stg_..., stg_...
 
@@ -499,7 +519,7 @@ Spawn `dbt-pipeline-toolkit:dbt-staging-builder:dbt-staging-builder` in **backgr
 ```
 Task(
   subagent_type: "dbt-pipeline-toolkit:dbt-staging-builder:dbt-staging-builder",
-  prompt: "Create staging model for raw.{source_table}. Source: {source_name}. Use profile at 1 - Documentation/data-profiles/profile_{table}_*.json. Read pipeline-design.md for context. To validate the model after writing it, run: `python \"${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py\" parse` and `python \"${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py\" run --select stg_{source}__{entity}`. These Bash calls are auto-approved by the plugin's PreToolUse hook.",
+  prompt: "Create staging model for raw.{source_table}. Source: {source_name}. Use profile at 1 - Documentation/data-profiles/profile_{table}_*.json. Read pipeline-design.md Sections 1, 2-3, and your model's row in Section 5 — these are the binding design decisions. To validate the model after writing it, run: `python \"${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py\" parse` and `python \"${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py\" run --select stg_{source}__{entity}`. These Bash calls are auto-approved by the plugin's PreToolUse hook.",
   run_in_background: true,
   mode: "acceptEdits"   // file writes enabled; Bash for plugin scripts is auto-approved by the PreToolUse hook in plugin.json
 )
@@ -529,6 +549,21 @@ Because each builder has `isolation: worktree` and writes to a unique `_dim_{ent
 
 Wait for ALL to complete. Collect JSON envelopes. Merge into Section 6.
 
+**Strict conformance gate — HALT on any deviation.** Before proceeding to Stage 9, scan every dim-builder JSON envelope for any of:
+
+- `status != "success"` (i.e. `"failed"` or `"partial"`)
+- `conforms_to_plan == false`
+- non-empty `deviations[]` array
+- non-empty `errors[]` array
+
+If any envelope has any of the above, STOP. Do NOT proceed to Stage 9. Do NOT silently accept a degraded build.
+
+1. Append a detailed entry to Section 12 (Design Decisions Log) listing each failing dim, its deviations, and the prompt parameters vs. what the builder actually produced.
+2. Invoke `AskUserQuestion` with the deviation summary. Offer two options: **(a) Accept deviation** — user confirms the degraded build is acceptable; orchestrator updates Section 6 and Section 8 to match reality, logs the acceptance in Section 12, then proceeds; **(b) Abort** — pipeline halts, user must revise sources or Section 8 target before re-running.
+3. Only proceed to Stage 9 after the user has explicitly accepted every deviation or the pipeline has been restarted with fixes.
+
+This gate exists because the orchestrator is the single source of plan consistency — if a dim-builder cannot match its prompt (e.g., a required attribute column doesn't exist in staging), the resulting dim will quietly diverge from Section 8's semantic contract, and the user will not know until they open the Power BI model. Fail fast here, with full context.
+
 **Update Section 11 (Created Objects Registry)** — for each dimension, add a row under "Dimensions":
 ```
 | dim_{entity} | TABLE | Stage 8 |
@@ -550,6 +585,8 @@ Task(
 ```
 
 Wait for all. Merge JSON envelopes into Section 7. Merge worktrees back to main.
+
+**Strict conformance gate — HALT on any deviation.** Apply the same rule as Stage 8: before proceeding to Stage 10, scan every fact-builder envelope for `status != "success"`, `conforms_to_plan == false`, non-empty `deviations[]`, or non-empty `errors[]`. On any hit: log to Section 12, invoke `AskUserQuestion` with the deviation summary (offer **accept** — update Section 7/8 to match reality — or **abort**), proceed only after every deviation has been explicitly accepted. Typical fact deviations include missing FK columns in staging, grain assumption mismatches, and measure columns that turn out to be text-typed in the source.
 
 **Update Section 11 (Created Objects Registry)** — for each fact, add a row under "Facts":
 ```

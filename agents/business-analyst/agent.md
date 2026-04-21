@@ -13,7 +13,7 @@ memory: project
 skills: dbt-pipeline-toolkit:data-profiler, dbt-pipeline-toolkit:sql-server-reader
 color: orange
 effort: high
-maxTurns: 60
+maxTurns: 80
 ---
 
 # Business Analyst Agent

@@ -60,7 +60,7 @@ class DBTDocsGenerator:
             print("Please run this command from a dbt project directory.", file=sys.stderr)
             sys.exit(1)
 
-    def generate(self, skip_catalog: bool = False) -> bool:
+    def generate(self, skip_catalog: bool = False, warn_error: bool = False) -> bool:
         """Generate dbt documentation."""
         print("Generating dbt documentation...")
         print(f"Project directory: {self.project_dir}")
@@ -71,6 +71,9 @@ class DBTDocsGenerator:
 
         if self.target:
             cmd.extend(["--target", self.target])
+
+        if warn_error:
+            cmd.extend(["--warn-error"])
 
         if skip_catalog:
             print("Skipping catalog generation (--no-catalog)")
@@ -338,6 +341,7 @@ def main():
     generate_parser.add_argument('--project-dir', default='.', help='Path to dbt project')
     generate_parser.add_argument('--target', help='dbt target to use')
     generate_parser.add_argument('--no-catalog', action='store_true', help='Skip catalog generation')
+    generate_parser.add_argument('--warn-error', action='store_true', help='Treat dbt warnings as errors (passes --warn-error to dbt)')
 
     # Serve command
     serve_parser = subparsers.add_parser('serve', help='Serve documentation locally')
@@ -353,10 +357,12 @@ def main():
     all_parser.add_argument('--port', type=int, default=8080, help='Port for docs server')
     all_parser.add_argument('--no-browser', action='store_true', help='Do not open browser')
     all_parser.add_argument('--no-catalog', action='store_true', help='Skip catalog generation')
+    all_parser.add_argument('--warn-error', action='store_true', help='Treat dbt warnings as errors (passes --warn-error to dbt)')
 
     # Export command
     export_parser = subparsers.add_parser('export', help='Export static documentation site')
     export_parser.add_argument('--project-dir', default='.', help='Path to dbt project')
+    export_parser.add_argument('--target', help='dbt target to use')
     export_parser.add_argument('--output-dir', default='./docs-export', help='Output directory')
 
     # Parse arguments
@@ -371,14 +377,14 @@ def main():
 
     # Execute command
     if args.command == 'generate':
-        success = generator.generate(skip_catalog=args.no_catalog)
+        success = generator.generate(skip_catalog=args.no_catalog, warn_error=args.warn_error)
 
     elif args.command == 'serve':
         success = generator.serve(port=args.port, open_browser=not args.no_browser)
 
     elif args.command == 'all':
         # Generate first
-        success = generator.generate(skip_catalog=args.no_catalog)
+        success = generator.generate(skip_catalog=args.no_catalog, warn_error=args.warn_error)
         if success:
             print("")
             print("-" * 60)

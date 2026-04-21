@@ -35,8 +35,20 @@ This document contains:
 - **Section 2-3: Source inventory** — tables, relationships, quality issues
 - **Section 4: Architecture** — schemas, database
 - **Section 5: Staging Plan** — read before using `ref()` to any staging model
+- **Section 6: Dimension Plan** — read the row for YOUR dim (binding spec for what to build)
+- **Section 8: Semantic Layer Plan** — the user-facing contract your dim must support
 
 Design decisions documented there are binding. Do not contradict earlier decisions without noting it in your completion summary.
+
+## Step 0: Verify prompt parameters against Section 6
+
+**Before writing any SQL**, compare the parameters the orchestrator passed in your prompt (natural key, SCD type, attribute list, hierarchy) against your dim's row in Section 6 of pipeline-design.md. They must match.
+
+Then check whether every specified attribute actually exists in the source staging model. Use the data profile at `1 - Documentation/data-profiles/profile_<source>.json` or the staging model's column list.
+
+If there is any mismatch — prompt vs. Section 6, or prompt vs. available source columns — **do NOT silently build a degraded dim**. Complete the build with the attributes you CAN satisfy, then set `conforms_to_plan: false` in your JSON completion envelope and list every mismatch in the `deviations[]` array. The orchestrator will halt, escalate to the user, and either accept the deviation (updating Section 6 and Section 8) or abort.
+
+This is a hard rule. Silent deviations break the user's mental model of what their Power BI semantic layer contains, and the cost is only caught when they open the PBIP — hours or days later. Fail fast here, with full context.
 
 ## CRITICAL: Mart Schema is NOT `dbo`
 
@@ -391,6 +403,8 @@ When invoked by `dbt-pipeline-orchestrator`, return a JSON envelope in addition 
   "model": "{model_name}",
   "model_file": "{path}",
   "schema_file": "{path}",
+  "conforms_to_plan": true,
+  "deviations": [],
   "design_decisions": {
     "natural_key": "{column}",
     "surrogate_key": "{column}",
@@ -411,6 +425,24 @@ When invoked by `dbt-pipeline-orchestrator`, return a JSON envelope in addition 
   "warnings": []
 }
 ```
+
+### `conforms_to_plan` and `deviations` — how to set them (per Step 0)
+
+- **`conforms_to_plan: true`** — prompt parameters matched Section 6 AND every specified attribute/hierarchy was successfully built from available source columns. `deviations` is `[]`.
+- **`conforms_to_plan: false`** — one or more specified attributes could not be built, OR prompt parameters diverged from Section 6, OR the orchestrator's prompt was internally inconsistent. Fill `deviations[]` with structured entries:
+
+```json
+"deviations": [
+  {
+    "type": "missing_attribute" | "missing_hierarchy" | "scd_type_mismatch" | "prompt_vs_section6_mismatch" | "source_column_type_mismatch",
+    "expected": "{what the prompt/Section 6 said}",
+    "actual": "{what was built or found}",
+    "impact": "{one-line consequence for the semantic model}"
+  }
+]
+```
+
+The orchestrator gates the pipeline on this: any non-empty `deviations` array halts progression to Stage 9 until the user explicitly accepts the deviation or aborts. The goal is: **no silent degradation between the plan the user approved and the dim table that lands in the warehouse**.
 
 The orchestrator uses this envelope to update the master pipeline-design.md document.
 
