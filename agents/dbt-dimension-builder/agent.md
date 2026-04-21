@@ -270,7 +270,35 @@ Create once and reuse across all fact tables:
 - Fiscal attributes: fiscal_year, fiscal_quarter
 - Flags: is_weekend, is_holiday, is_business_day
 
-See `Agents/reference/examples/dimension-models.md` for complete date dimension example.
+See `reference/examples/dimension-models.md` for complete date dimension example.
+
+### CRITICAL: Never use `dbt_utils.date_spine()` on SQL Server
+
+`dbt_utils.date_spine()` expands to a **nested `WITH` clause** (`WITH rawdata AS (WITH p0 AS (...), p1 AS (...) ...)`) which T-SQL rejects outright with "Incorrect syntax near the keyword 'with'". This is a T-SQL dialect limitation — `materialized='table'` does NOT help.
+
+**Use the plugin-shipped `date_spine` macro** at `macros/date_spine.sql` (auto-installed by `dbt-project-initializer`). It has the same signature as `dbt_utils.date_spine` — just drop the `dbt_utils.` namespace:
+
+```sql
+-- ❌ WRONG — fails with nested-CTE error on SQL Server
+date_spine as (
+    {{ dbt_utils.date_spine(
+        datepart="day",
+        start_date="cast('2020-01-01' as date)",
+        end_date="cast('2030-12-31' as date)"
+    ) }}
+)
+
+-- ✅ CORRECT — uses plugin-shipped T-SQL-native macro
+date_spine as (
+    {{ date_spine(
+        datepart="day",
+        start_date="cast('2020-01-01' as date)",
+        end_date="cast('2030-12-31' as date)"
+    ) }}
+)
+```
+
+The plugin macro currently supports `datepart='day'` only (the 99% case). For month/week/year grains, group the day-level output in the caller. Background: see `_Plan/Issues.md` I-048.
 
 ## Role-Playing Dimensions
 

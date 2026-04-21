@@ -240,6 +240,12 @@ select * from customer_history
 
 **File**: `models/marts/dim_date.sql`
 
+> **SQL Server note:** this example uses the plugin-shipped `date_spine` macro
+> at `macros/date_spine.sql`, NOT `dbt_utils.date_spine`. The dbt_utils version
+> emits nested `WITH` CTEs that T-SQL rejects (see `_Plan/Issues.md` I-048).
+> The plugin macro has the same signature — `date_spine(datepart, start_date, end_date)` —
+> so porting between adapters only requires changing the namespace.
+
 ```sql
 {{
     config(
@@ -250,7 +256,7 @@ select * from customer_history
 with
 
 date_spine as (
-    {{ dbt_utils.date_spine(
+    {{ date_spine(
         datepart="day",
         start_date="cast('2020-01-01' as date)",
         end_date="cast('2030-12-31' as date)"

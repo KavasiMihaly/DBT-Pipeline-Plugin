@@ -211,11 +211,46 @@ def generate_packages_yml() -> str:
     """Generate packages.yml content."""
     return """# dbt packages
 # Run 'dbt deps' to install
+#
+# Note: dbt_utils.date_spine() does NOT work on SQL Server (nested CTEs rejected
+# by T-SQL). Use the plugin-shipped `date_spine` macro at macros/date_spine.sql
+# instead. See _Plan/Issues.md I-048 if interested in the full story.
 
 packages:
   - package: dbt-labs/dbt_utils
     version: [">=1.0.0", "<2.0.0"]
 """
+
+
+def copy_plugin_macros(data_pipeline_path: Path) -> None:
+    """Copy plugin-shipped dbt macros into the user's macros/ folder.
+
+    These macros fill T-SQL-specific gaps that `dbt_utils` does not handle
+    correctly (notably `date_spine` — see I-048). Macro files live in the
+    skill's `templates/macros/` folder so they can be edited as real .sql
+    files rather than as Python string constants.
+    """
+    import shutil
+
+    script_dir = Path(__file__).parent
+    source_macros_dir = script_dir.parent / "templates" / "macros"
+    target_macros_dir = data_pipeline_path / "macros"
+
+    if not source_macros_dir.exists():
+        print(f"  WARNING: Plugin macro templates not found at {source_macros_dir}. Skipping macro copy.")
+        return
+
+    target_macros_dir.mkdir(parents=True, exist_ok=True)
+
+    macro_files = sorted(source_macros_dir.glob("*.sql"))
+    if not macro_files:
+        print(f"  WARNING: No .sql files found in {source_macros_dir}. Skipping macro copy.")
+        return
+
+    for macro_file in macro_files:
+        destination = target_macros_dir / macro_file.name
+        shutil.copyfile(macro_file, destination)
+        print(f"  Created: 3 - Data Pipeline/macros/{macro_file.name}")
 
 
 def generate_profiles_example(config: dict) -> str:
@@ -1159,6 +1194,10 @@ def main():
     # packages.yml
     (data_pipeline_path / "packages.yml").write_text(generate_packages_yml(), encoding='utf-8')
     print("  Created: 3 - Data Pipeline/packages.yml")
+
+    # Copy plugin-shipped T-SQL macros (date_spine, etc.) into the user's macros/ folder.
+    # These fill gaps where dbt_utils fails on SQL Server (I-048).
+    copy_plugin_macros(data_pipeline_path)
 
     # profiles.yml.example (template with placeholders)
     (data_pipeline_path / "profiles.yml.example").write_text(generate_profiles_example(config), encoding='utf-8')
