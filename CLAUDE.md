@@ -114,6 +114,22 @@ Every new row in `Issues.md` needs:
 - **After every significant development session:** add new entries for anything discovered during the session. The session ends with a clean Issues.md, or it doesn't end.
 - **Weekly cleanup:** archive closed items > 30 days old, re-triage items that have been open too long, consolidate any duplicates.
 
+### Bug-class audit policy
+
+When you discover a bug that matches the *shape* of a previously-resolved issue, do not file it as a single instance. The class is what matters, not the instance.
+
+**Procedure:**
+
+1. **Recognise the class.** Common classes already seen in this plugin: path-prefix leakage (bare `scripts/`, `$HOME/.claude/skills/`, Windows backslashes — I-047, I-021), namespace format mismatches (2-part vs 3-part — Finding 1), compound Bash expressions (Finding 9 atomic refactor), improper agent frontmatter fields (Finding 2), SKILL.md flag names that don't exist in the script's argparse (I-018, I-050), `Path(__file__)` used to find user-project content (I-023).
+2. **Grep the entire plugin first.** Before opening an issue, run the matching grep across `agents/`, `skills/`, `hooks/`, `reference/`, and `_Documentation/`. Treat the *count of occurrences* as the size of the problem.
+3. **File ONE issue covering the full scope.** Title the row "<class> — N occurrences across M files." Include the grep command in the body so the reviewer can re-derive the list. Do NOT open one issue per file.
+4. **Fix all instances in one pass.** The risk of partial fixes is that the next contributor sees mixed forms and concludes the old form is still valid. One pass, one PR, one verification.
+5. **Add a regression check.** A new gate in the pre-ship audit suite (see Backlog → Developer tooling) for each new class. If the grep returns >0 after the fix, the audit fails. This is how a bug-class becomes extinct rather than dormant.
+
+**Why this matters:** every cross-plugin learning we've documented in this CLAUDE.md was discovered as one instance, then audit revealed the full footprint. I-047 alone surfaced 14 instances of bare `scripts/` paths across 4 builder agents and 1 docs-generator script. Treating it as a single bug would have left 13 ticking time bombs in the plugin.
+
+Source: codified from a project-specific Claude Code auto-memory feedback entry. This CLAUDE.md is the canonical home for the rule going forward.
+
 ### Anti-patterns to avoid
 
 - **Don't file an issue and then forget to add the ID to commits that touch related code.** Reference the `I-###` ID in commit messages ("fix: use --target flag instead of nonexistent --fail-below (I-018)") so the history is searchable.
@@ -338,7 +354,7 @@ Before this refactor, `hooks/approve-plugin-bash.py` needed ~60 lines of quote-a
 
 **Change:** Rewrote the project-root discovery logic in `skills/sql-executor/scripts/load_data.py` and `skills/sql-server-reader/scripts/query_sql_server.py`. Both scripts now check `Path.cwd()` first for project folders (`2 - Source Files/`, `7 - Data Exports/`), then walk up from CWD, and only fall back to `Path(__file__)`-based resolution as a last resort for local dev.
 
-**Reason:** When installed as a plugin, `__file__` resolves to `~/.claude/plugins/cache/<id>/skills/<name>/scripts/<file>.py`. Walking up from that path will never find the user's project directory — it finds the plugin cache root, which has no `2 - Source Files/` folder. The error message was: `[WARNING] Source directory not found at C:\Users\kavas\.claude\plugins\cache\OneDayBI-Marketplace\dbt-pipeline-toolkit\2 - Source Files`. Claude Code sets the Bash CWD to the user's project directory, so `Path.cwd()` is the correct primary source for project root.
+**Reason:** When installed as a plugin, `__file__` resolves to `~/.claude/plugins/cache/<id>/skills/<name>/scripts/<file>.py`. Walking up from that path will never find the user's project directory — it finds the plugin cache root, which has no `2 - Source Files/` folder. The error message was: `[WARNING] Source directory not found at ~/.claude/plugins/cache/<marketplace>/dbt-pipeline-toolkit/2 - Source Files`. Claude Code sets the Bash CWD to the user's project directory, so `Path.cwd()` is the correct primary source for project root.
 
 **Important distinction:** `Path(__file__)` is still correct for finding **files within the skill's own directory structure** (templates, sibling scripts). The fix only applies to finding **user project directories** like `2 - Source Files/` and `7 - Data Exports/`.
 

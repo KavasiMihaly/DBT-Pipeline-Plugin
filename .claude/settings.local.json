@@ -11,7 +11,14 @@
       "Bash(PYTHONIOENCODING=utf-8 python \"C:/Users/kavas/Documents/GitHub/DBT Pipeline Plugin/skills/pbip-from-dbt/scripts/build_pbip.py\" --output \"4 - Semantic Layer\" --name \"Sales Analytics\" --verbose)",
       "Bash(PYTHONIOENCODING=utf-8 python \"C:/Users/kavas/Documents/GitHub/DBT Pipeline Plugin/skills/pbip-from-dbt/scripts/build_pbip.py\" --output \"4 - Semantic Layer\" --name \"Empty\" --design-file \"1 - Documentation/pipeline-design-empty.md\" --server \"x\" --database \"y\")",
       "Bash(echo \"exit=$?\")",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(rm *)",
+      "Bash(Get-ChildItem *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\kavas\\\\Documents\\\\GitHub\\\\Plugins\\\\AI-plugins\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Head -30)",
+      "PowerShell(Head *)",
+      "Bash(powershell *)"
     ]
   }
 }

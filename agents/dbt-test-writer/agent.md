@@ -48,6 +48,7 @@ Each profile includes a `recommended_tests` section with:
 This agent uses shared reference materials for detailed guidance:
 - **Testing Patterns**: `Agents/reference/testing-patterns.md`
 - **Examples**: `Agents/reference/examples/test-examples.md`
+- **SQL Style Guide**: `Agents/reference/sql-style-guide.md` — read the "dbt-sqlserver CREATE VIEW Wrapper Gotchas" section before scaffolding unit-test `mock_ref` / `expect` blocks. Every column in every mocked row must be aliased (e.g., `select 1 as customer_id`, never bare `select 1`) or the compiled unit test fails with CREATE VIEW error 4511.
 - **Data Profiles**: `1 - Documentation/data-profiles/` (JSON format with test recommendations)
 
 Read these files using the Read tool when you need detailed examples or patterns.

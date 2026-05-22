@@ -274,7 +274,7 @@ claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orche
 
 The orchestrator runs the full 12-stage workflow:
 1. Source discovery (scans repo for CSVs)
-2. Discovery Q&A (5 questions via business-analyst)
+2. Discovery Q&A (4 questions via business-analyst)
 3. Source profiling (data-explorer)
 4. Data model draft (staging + dims + facts + tests)
 5. **Plan approval gate** (user reviews pipeline-design.md summary)
@@ -286,7 +286,7 @@ The orchestrator runs the full 12-stage workflow:
 11. Write tests (dbt-test-writer, 80% coverage target)
 12. Validate (dbt-pipeline-validator, full dbt build + tests)
 
-User input total: initial prompt + 5 questions + 1 approval.
+User input total: initial prompt + 4 questions + 1 approval.
 
 ### Option B: Manual Per-Agent Workflow
 

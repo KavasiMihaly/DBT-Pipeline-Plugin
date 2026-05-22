@@ -15,9 +15,9 @@ User drops CSVs ──▶ Orchestrator ──▶ 13 stages (0-12) ──▶ Vali
 
 | Actor | Role | Invocation mode |
 |---|---|---|
-| **User** | Provides CSVs, answers 5 discovery questions, approves plan | Interactive |
+| **User** | Provides CSVs, answers 4 discovery questions, approves plan | Interactive |
 | **Orchestrator** (`dbt-pipeline-orchestrator`) | Main thread — coordinates all specialists, owns master doc | `claude --agent` |
-| **business-analyst** | Reads profiles, asks 5 questions, writes Section 1 | Foreground subagent |
+| **business-analyst** | Reads profiles, asks 4 questions, writes Section 1 | Foreground subagent |
 | **data-explorer** | Profiles CSVs in parallel, returns source inventory JSON | Background subagent (1 per CSV) |
 | **dbt-architecture-setup** | Scaffolds folders, venv, dbt_project.yml, profiles.yml | Foreground subagent |
 | **sql-executor** (skill) | Bulk-loads CSVs into `raw` schema | Bash-invoked |
@@ -50,8 +50,8 @@ User drops CSVs ──▶ Orchestrator ──▶ 13 stages (0-12) ──▶ Vali
 ### Stage 2 — Discovery Q&A **(USER TOUCH POINT 1)**
 - **Actor:** `business-analyst` (foreground)
 - **Input:** All profile JSONs
-- **Action:** Reads profiles, presents source-aware options, asks 5 standard questions in one `AskUserQuestion` call
-- **Output:** Section 1 of pipeline-design.md (goals, consumers, metrics, time grain, target DB)
+- **Action:** Reads profiles, presents source-aware options, asks 4 standard questions in one structured `AskUserQuestion` call (questions[] with options[], header, multiSelect)
+- **Output:** Section 1 of pipeline-design.md (goals, consumers, metrics, time grain)
 
 ### Stage 3 — Draft Proposed Data Model
 - **Actor:** Orchestrator

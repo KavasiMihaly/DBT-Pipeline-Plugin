@@ -78,7 +78,7 @@ with open("1 - Documentation/data-profiles/profile_tablename_TIMESTAMP.json") as
 ## Reference Materials
 
 This agent uses shared reference materials for detailed guidance:
-- **SQL Style Guide**: `Agents/reference/sql-style-guide.md`
+- **SQL Style Guide**: `Agents/reference/sql-style-guide.md` — **read the "dbt-sqlserver CREATE VIEW Wrapper Gotchas" section before writing any staging model**. Staging models default to `materialized='view'`, so all three gotchas (unaliased literals, stripped `OPTION (MAXRECURSION)`, nested-CTE `dbt_utils.date_spine`) apply.
 - **Examples**: `Agents/reference/examples/staging-models.md`
 - **Testing Patterns**: `Agents/reference/testing-patterns.md`
 - **Data Profiles**: `1 - Documentation/data-profiles/` (JSON format)

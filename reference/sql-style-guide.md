@@ -669,6 +669,118 @@ Use standard SQL or dbt macros for portability
 
 ---
 
+## dbt-sqlserver CREATE VIEW Wrapper Gotchas
+
+**Applies to any model that ends up as a view** — i.e., `materialized: 'view'` (default for staging and most intermediate models) or `materialized: 'ephemeral'`. Not to models with `materialized: 'table'` or `'incremental'`.
+
+The dbt-sqlserver adapter wraps every non-table model in roughly:
+
+```sql
+create view {{ this }} as
+select * from (
+    <your model SQL>
+) as _dbt_view_wrapper
+```
+
+Three T-SQL limitations of that wrapper cause otherwise-valid dbt models to fail, strip hints, or degrade silently. Prevent all three at author time:
+
+### 1. Every column — including literals — must be aliased (error 4511)
+
+T-SQL requires every view column to have a name. The wrapper's outer `select *` doesn't assign names, so an unaliased literal in your model surfaces as an unnamed view column and the `CREATE VIEW` fails with:
+
+> Msg 4511: CREATE VIEW failed because no column name was specified for column N.
+
+✅ **Good**:
+```sql
+select
+    order_id,
+    1 as is_active_flag,
+    null as deleted_at,
+    'order' as record_type
+from {{ ref('stg_orders') }}
+```
+
+❌ **Bad** (fails CREATE VIEW):
+```sql
+select
+    order_id,
+    1,                   -- unnamed column
+    null,                -- unnamed column
+    'order'              -- unnamed column
+from {{ ref('stg_orders') }}
+```
+
+This matters most for scaffolding patterns (`select 1`, `select null as x union all select null`), one-off constants in CASE output, and `union all` branches whose column order is known but aliases are skipped in later branches.
+
+### 2. `OPTION (MAXRECURSION N)` is stripped by the view wrapper
+
+Query-level hints like `OPTION (MAXRECURSION 500)` only apply to the outermost statement. When the adapter wraps your model in `select * from (...) _dbt_view_wrapper`, the hint is attached to the wrapper's outer SELECT — not to your recursive CTE — and T-SQL silently caps recursion at the default 100 rows with no warning.
+
+**Any model that uses a recursive CTE must be materialized as a table**, not a view:
+
+```sql
+{{
+    config(
+        materialized='table'
+    )
+}}
+
+with recursive_calendar as (
+    select cast('2020-01-01' as date) as date_day
+    union all
+    select dateadd(day, 1, date_day)
+    from recursive_calendar
+    where date_day < '2030-12-31'
+)
+
+select * from recursive_calendar
+option (maxrecursion 5000)
+```
+
+With `materialized: 'table'` the adapter generates `SELECT INTO` or `INSERT ... SELECT` instead of a `CREATE VIEW` wrapper, and `OPTION (MAXRECURSION N)` is preserved on the outermost statement.
+
+If you see `OPTION (MAXRECURSION N)` in any model, verify the config block says `materialized='table'`. If it doesn't, the hint is dead code and the model is capped at 100 rows.
+
+### 3. `dbt_utils.date_spine()` emits a nested `WITH` clause that T-SQL rejects
+
+`dbt_utils.date_spine()` internally expands to `with rawdata as (with p0 as (...), p1 as (...) ...)` — a `WITH` nested inside another `WITH`. T-SQL rejects this outright with "Incorrect syntax near the keyword 'with'", regardless of materialization. Issue I-048 documents the full investigation; the short version is that `materialized='table'` does NOT fix it, and `calogica/dbt_date` internally calls `dbt_utils.date_spine()` so it doesn't fix it either.
+
+**Use the plugin-shipped `date_spine` macro** at `macros/date_spine.sql`, auto-installed by `dbt-project-initializer`. Same signature as `dbt_utils.date_spine` — just drop the namespace:
+
+```sql
+-- ❌ Wrong — nested WITH clause, fails to compile on SQL Server
+with date_spine as (
+    {{ dbt_utils.date_spine(
+        datepart="day",
+        start_date="cast('2020-01-01' as date)",
+        end_date="cast('2030-12-31' as date)"
+    ) }}
+)
+select * from date_spine
+
+-- ✅ Correct — plugin macro emits a single SELECT with no leading WITH
+with date_spine as (
+    {{ date_spine(
+        datepart="day",
+        start_date="cast('2020-01-01' as date)",
+        end_date="cast('2030-12-31' as date)"
+    ) }}
+)
+select * from date_spine
+```
+
+The plugin macro supports `datepart='day'` only — for month/week/year grains, aggregate day-level output in the caller.
+
+### Summary checklist
+
+Before marking any non-table model as done:
+
+- [ ] Every column in every SELECT has an alias, including literals and NULLs
+- [ ] If the model uses a recursive CTE or `OPTION (MAXRECURSION)`, `config(materialized='table')` is set
+- [ ] The model does NOT call `dbt_utils.date_spine` — it calls the plugin's `date_spine` (or is materialized as a table using a non-recursive spine pattern)
+
+---
+
 ## Anti-Patterns to Avoid
 
 ❌ **Don't use SELECT ***

@@ -286,6 +286,8 @@ See `reference/examples/dimension-models.md` for complete date dimension example
 
 ### CRITICAL: Never use `dbt_utils.date_spine()` on SQL Server
 
+This is one of three related dbt-sqlserver failure modes documented together in `reference/sql-style-guide.md` → "dbt-sqlserver CREATE VIEW Wrapper Gotchas". Read that section before building `dim_date` or any other dimension that uses literals, recursive CTEs, or date spines.
+
 `dbt_utils.date_spine()` expands to a **nested `WITH` clause** (`WITH rawdata AS (WITH p0 AS (...), p1 AS (...) ...)`) which T-SQL rejects outright with "Incorrect syntax near the keyword 'with'". This is a T-SQL dialect limitation — `materialized='table'` does NOT help.
 
 **Use the plugin-shipped `date_spine` macro** at `macros/date_spine.sql` (auto-installed by `dbt-project-initializer`). It has the same signature as `dbt_utils.date_spine` — just drop the `dbt_utils.` namespace:

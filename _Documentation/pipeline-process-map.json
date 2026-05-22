@@ -48,8 +48,8 @@
     { "id": "n_s1_artifact", "label": "profile_<name>.json × N", "type": "artifact", "lane": "lane_artifacts", "stage": 1 },
     { "id": "n_s1_merge", "label": "Orchestrator merges profiles → pipeline-design.md Sections 2 + 3", "type": "orchestrator", "lane": "lane_orchestrator", "stage": 1 },
 
-    { "id": "n_s2", "label": "Stage 2: Discovery Q&A (5 questions)", "type": "agent_foreground", "lane": "lane_specialists", "agent": "business-analyst", "stage": 2 },
-    { "id": "n_s2_touch", "label": "USER TOUCH POINT 1 — answer 5 questions", "type": "touch_point", "lane": "lane_user", "stage": 2 },
+    { "id": "n_s2", "label": "Stage 2: Discovery Q&A (4 questions)", "type": "agent_foreground", "lane": "lane_specialists", "agent": "business-analyst", "stage": 2 },
+    { "id": "n_s2_touch", "label": "USER TOUCH POINT 1 — answer 4 questions", "type": "touch_point", "lane": "lane_user", "stage": 2 },
     { "id": "n_s2_artifact", "label": "pipeline-design.md Section 1 (Requirements)", "type": "artifact", "lane": "lane_artifacts", "stage": 2 },
 
     { "id": "n_s3", "label": "Stage 3: Draft proposed data model (staging + dims + facts + semantic)", "type": "orchestrator", "lane": "lane_orchestrator", "stage": 3 },

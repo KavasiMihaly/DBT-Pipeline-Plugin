@@ -12,7 +12,7 @@ Everything in this doc is the result of things that **actually broke** when the 
 
 A data engineering pipeline is a *multi-agent problem by nature*. You have distinct roles — requirements, source profiling, staging, dimensions, facts, tests, validation — each with its own expertise and its own tools. Claude Code subagents map cleanly onto these roles, and orchestration lets a "conductor" agent drive the entire workflow with minimal human touch points (2 total in this plugin: a discovery Q&A and a plan approval gate).
 
-The promise: a user drops CSV files in a folder, answers 5 questions, approves a plan, and walks away with a fully tested, validated dbt pipeline. The reality: getting there surfaced several gotchas that aren't obvious from the plugin documentation alone.
+The promise: a user drops CSV files in a folder, answers 4 questions, approves a plan, and walks away with a fully tested, validated dbt pipeline. The reality: getting there surfaced several gotchas that aren't obvious from the plugin documentation alone.
 
 ---
 

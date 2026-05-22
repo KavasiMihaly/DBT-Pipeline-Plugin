@@ -91,7 +91,7 @@ Profiles provide:
 ## Reference Materials
 
 This agent uses shared reference materials for detailed guidance:
-- **SQL Style Guide**: `Agents/reference/sql-style-guide.md`
+- **SQL Style Guide**: `Agents/reference/sql-style-guide.md` — read the "dbt-sqlserver CREATE VIEW Wrapper Gotchas" section. Facts materialize as `table` or `incremental` so the wrapper gotchas don't hit fact SQL directly, but any intermediate view in the fact's CTE chain — or any union/helper model marked `ephemeral` — shares the same failure modes.
 - **Examples**: `Agents/reference/examples/fact-models.md`
 - **Testing Patterns**: `Agents/reference/testing-patterns.md`
 - **Data Profiles**: `1 - Documentation/data-profiles/` (JSON format)

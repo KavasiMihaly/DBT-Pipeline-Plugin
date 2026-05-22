@@ -23,7 +23,7 @@ The orchestrator runs in the user's current working directory. That directory be
 
 Exactly **two** interactive touch points. Everything else runs autonomously.
 
-1. **Discovery Q&A** — 5 questions via `business-analyst` subagent (Stage 2)
+1. **Discovery Q&A** — 4 questions via `business-analyst` subagent (Stage 2)
 2. **Design approval** — native plan mode with semantic model summary (Stage 4)
 
 A third, conditional touch point: **deviation escalation** at Stages 8 and 9 if a builder can't satisfy its prompt. The user is asked *accept deviation* (update the plan to match reality) vs. *abort* (fix sources and re-run). This only fires on contract breaks — a clean build never hits it.

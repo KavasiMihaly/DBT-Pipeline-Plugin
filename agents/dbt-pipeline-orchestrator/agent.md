@@ -64,7 +64,7 @@ Your **working directory is the target repo.** All paths are relative to cwd unl
 ## User Interaction Budget
 
 You get exactly **two user touch points**:
-1. **Discovery Q&A** — via `business-analyst` subagent (5 questions)
+1. **Discovery Q&A** — via `business-analyst` subagent (4 questions)
 2. **Design approval** — via native plan mode after drafting pipeline-design.md
 
 Everything else runs autonomously. Do NOT use `AskUserQuestion` outside these two points except for failure escalation.
@@ -225,7 +225,7 @@ Spawn `dbt-pipeline-toolkit:business-analyst:business-analyst` in **foreground**
 ```
 Task(
   subagent_type: "dbt-pipeline-toolkit:business-analyst:business-analyst",
-  prompt: "Pipeline goals discovery. Data profiles are available at 1 - Documentation/data-profiles/. Read ALL profile JSON files first to understand the source data (entities, columns, data types, date columns, numeric columns, cardinality, PK candidates). Then ask the user ALL 5 standard pipeline questions using a single AskUserQuestion call — include source-relevant options derived from the profiles. Do NOT assume or pre-fill any answer. Also ask for the target SQL Server database name. After collecting all answers, write Section 1 of 1 - Documentation/pipeline-design.md (create file if needed).",
+  prompt: "Pipeline goals discovery. Data profiles are available at 1 - Documentation/data-profiles/. Read ALL profile JSON files first to understand the source data (entities, columns, data types, date columns, numeric columns, cardinality, PK candidates). Then ask the user ALL 4 standard pipeline questions using a single STRUCTURED AskUserQuestion call — must use the structured schema (questions[] array, each with question/header/options[]/multiSelect). Plain-text invocations fail silently. Include source-relevant options derived from the profiles. Do NOT assume or pre-fill any answer. Do NOT ask for the target database — it was already configured in Pre-Stage. After collecting all answers, write Section 1 of 1 - Documentation/pipeline-design.md (create file if needed).",
   // NO run_in_background — foreground so the analyst can prompt the user
 )
 ```
@@ -764,7 +764,7 @@ claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orche
 
 **Expected flow:**
 1. You scan, find 3 CSVs in root
-2. Spawn business-analyst → 5 questions asked
+2. Spawn business-analyst → 4 questions asked
 3. Spawn data-explorer → 3 CSVs profiled
 4. You draft data model (3 staging, 2-3 dims + dim_date, 1 fact)
 5. Plan approval → user approves
@@ -783,19 +783,24 @@ To completely wipe a pipeline build and return the project to its original state
 
 ```bash
 # Total reset — database tables + all project folders + venv + git
-python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --database {database_name} --schemas raw,dbo
+# Schemas are auto-detected from dbt_project.yml + profiles.yml;
+# defaults fall back to raw, dbo_staging, dbo_analytics.
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --database {database_name}
+
+# Override schemas explicitly (raw, staging, marts — 3 values, in that order)
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --database {database_name} --schemas raw,dbo_staging,dbo_analytics
 
 # Preview what would be dropped/deleted without executing
-python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --dry-run
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --database {database_name} --dry-run
 
 # Only reset database, keep project files
-python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --db-only
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --database {database_name} --db-only
 
 # Only reset files, keep database tables
-python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --files-only
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --database {database_name} --files-only
 
-# Keep raw source tables, only drop dbt-created models (dbo schema)
-python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --keep-raw
+# Keep raw source tables, only drop dbt-created staging views and marts tables
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --database {database_name} --keep-raw
 ```
 
 **What the total reset does:**
