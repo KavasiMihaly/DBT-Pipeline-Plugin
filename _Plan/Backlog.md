@@ -6,6 +6,16 @@ Forward-looking work items and epics for this plugin. Follows the column schema 
 
 | Backlog Item | Epic | Plan File | Research File | State |
 |---|---|---|---|---|
+| **Workshop demo readiness — 1-week sprint to demo-ready (Pre-Stage → Stage 7 live, Stage 12 fallback snapshot)** | **Workshop demo readiness** | `_Plan/workshop-readiness-2026-05-24.md` | — | **In Progress** |
+| **Pre-Slice-1 P-1 — Apply `worktree.bgIsolation: "none"` setting via `configure.py` (closes I-064)** | Workshop demo readiness | `_Plan/workshop-readiness-2026-05-24.md:Pre-Slice-1 P-1` | `Plugins/Dataflow to Notebook Plugin/_Documentation/plugin_learnings.md` (N8) + `anthropics/claude-code` CHANGELOG.md v2.1.143 | In Progress |
+| **Pre-Slice-1 P-2 — Scaffold-time copy of `reference/*` into project (closes I-065)** | Workshop demo readiness | `_Plan/workshop-readiness-2026-05-24.md:Pre-Slice-1 P-2` | `Plugins/Dataflow to Notebook Plugin/_Documentation/plugin_learnings.md` (N14) | In Progress |
+| **Pre-Slice-1 P-3 — Restructure Stage 2 to three-sub-step parent-owned pattern (closes reopened I-063)** | Workshop demo readiness | `_Plan/workshop-readiness-2026-05-24.md:Pre-Slice-1 P-3` | `Plugins/Dataflow to Notebook Plugin/_Documentation/plugin_learnings.md` (N15) | In Progress |
+| **Pre-Slice-1 P-4 — Tighten builder agent bodies + Stage 7 orchestrator prompts to prevent stray files (closes I-072)** | Workshop demo readiness | `_Plan/workshop-readiness-2026-05-24.md:Pre-Slice-1 P-4` | `Plugins/Dataflow to Notebook Plugin/_Documentation/plugin_learnings.md` (N16) | In Progress |
+| Slice 1 — Discovery dry run + diagnostic baseline (Day 1) | Workshop demo readiness | `_Plan/workshop-readiness-2026-05-24.md:Slice 1` | — | Backlog |
+| Slice 2 — Critical-bug fixes from discovery + I-047 audit + I-058 hardening (Days 2-3) | Workshop demo readiness | `_Plan/workshop-readiness-2026-05-24.md:Slice 2` | — | Backlog |
+| Slice 3 — Stage 8-12 single-pass dry run + fallback snapshot capture (Day 4) | Workshop demo readiness | `_Plan/workshop-readiness-2026-05-24.md:Slice 3` | — | Backlog |
+| Slice 4 — Confirmation dry runs + dress rehearsal + runbook (Days 5-6) | Workshop demo readiness | `_Plan/workshop-readiness-2026-05-24.md:Slice 4` | — | Backlog |
+| Slice 5 — Workshop day execution (Day 7) | Workshop demo readiness | `_Plan/workshop-readiness-2026-05-24.md:Slice 5` | — | Backlog |
 | Fresh-install empirical verification of every claim in Finding 9 | Production readiness | (tbd) | `_Research/plugin-subagent-delegation.md` | Backlog |
 | Build end-to-end smoke test that runs orchestrator on a 3-table sample dataset | Production readiness | (tbd) | — | Backlog |
 | Write comprehensive plugin README covering install, configuration, invocation, troubleshooting | Documentation | (tbd) | — | Backlog |
@@ -40,6 +50,8 @@ Forward-looking work items and epics for this plugin. Follows the column schema 
 | Re-test `userConfig` optional-field handling (see I-071) — could downgrade or close I-008 | Upstream tooling adoption | (tbd) | Claude Code changelog v2.1.119 | Backlog |
 
 ## Epics
+
+**Workshop demo readiness** *(new — active 2026-05-24)* — 1-week sprint to make Pre-Stage → Stage 7 demonstrably reliable on the demo laptop with full Road Safety Data, including two pre-baked fallback snapshots (`design-complete` at Stage 4, `end-result` at Stage 12). Driven by `_Plan/workshop-readiness-2026-05-24.md`. This epic supersedes routine Production readiness work for the duration of the sprint; routine work resumes post-workshop.
 
 **Production readiness** — everything required to claim the plugin works reliably on a fresh install. Covers empirical verification, end-to-end smoke tests, README documentation, `userConfig` fixes, TLS troubleshooting, versioning story.
 

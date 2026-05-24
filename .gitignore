@@ -70,3 +70,4 @@ desktop.ini
 # document findings. Don't ignore them.
 # But DO ignore any *.bak file left behind by merge helpers.
 *.bak
+_Plan/workshop-readiness-2026-05-24.md
