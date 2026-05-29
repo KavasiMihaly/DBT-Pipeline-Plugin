@@ -1,5 +1,7 @@
 # Plugin-wide Logical Consistency Review — 2026-04-21
 
+> **STATUS 2026-05-29:** all critical findings (A-001 / I-049, S-001 / I-050) resolved; see Issues.md. This document is a point-in-time archive — findings below are NOT rewritten.
+
 Full audit of the `dbt-pipeline-toolkit` plugin across three layers (agents, skills, infrastructure). Three specialist Explore agents ran in parallel; this document merges their findings into a single prioritized list with Issues.md follow-up recommendations.
 
 ## Scope

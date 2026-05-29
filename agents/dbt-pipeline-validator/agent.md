@@ -121,7 +121,7 @@ Insert or replace the Section 10 block. Do not touch any other section — each 
 ### Next step
 
 {Based on status:}
-- Validated → "Ready for semantic layer — invoke `tmdl-scaffold`."
+- Validated → "Ready for semantic layer — invoke `pbip-from-dbt`."
 - Build complete, coverage below target → "Re-invoke `dbt-test-writer` to close the coverage gap, then re-run validator."
 - Build Failed → "Fix the compile/run error in {model_name}, then re-run validator."
 - No Pipeline Found → "No objects in Section 11 registry — confirm prior stages completed."

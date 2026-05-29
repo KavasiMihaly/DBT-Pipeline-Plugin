@@ -11,7 +11,7 @@ Initialize a complete data engineering project with the standard folder structur
 ## Overview
 
 This skill creates a fully configured project structure for dbt + SQL Server + Power BI development workflows. It sets up:
-- Numbered folder structure (0-7) for organized development
+- Numbered folder structure (0-6) for organized development
 - Python virtual environment with all required packages
 - dbt project configuration templates
 - CLAUDE.md customized for the project
@@ -137,17 +137,18 @@ The skill automatically creates a Python 3.12 virtual environment and installs:
 
 After initialization, complete these steps:
 
-1. **Configure dbt profile**:
+1. **Configure dbt profile** (run each command separately from inside `3 - Data Pipeline/`):
    ```bash
-   cd "3 - Data Pipeline"
-   cp profiles.yml.example profiles.yml
-   # Edit profiles.yml with your connection details
-   dbt debug
+   cp "3 - Data Pipeline/profiles.yml.example" "3 - Data Pipeline/profiles.yml"
+   ```
+   Edit `profiles.yml` with your connection details, then verify:
+   ```bash
+   dbt debug --project-dir "3 - Data Pipeline"
    ```
 
 2. **Install dbt packages**:
    ```bash
-   dbt deps
+   dbt deps --project-dir "3 - Data Pipeline"
    ```
 
 3. **Load source data**:
@@ -185,8 +186,8 @@ Edit these to customize default configurations.
 
 ### Adding Reference Materials
 
-The skill copies reference materials from `Agents/reference/` in this repository. To add new reference materials:
-1. Add files to `Agents/reference/`
+The skill copies reference materials from `${CLAUDE_PLUGIN_ROOT}/reference/` in this plugin. To add new reference materials:
+1. Add files to `${CLAUDE_PLUGIN_ROOT}/reference/`
 2. They will be copied automatically during initialization
 
 ## Troubleshooting
@@ -214,10 +215,12 @@ py -3.12 --version
 ### dbt Connection Issues
 
 ```powershell
-cd "3 - Data Pipeline"
-dbt debug
+dbt debug --project-dir "3 - Data Pipeline"
+```
 
-# Check ODBC driver
+Check the installed ODBC drivers separately:
+
+```powershell
 python -c "import pyodbc; print(pyodbc.drivers())"
 ```
 
@@ -226,4 +229,4 @@ python -c "import pyodbc; print(pyodbc.drivers())"
 - **dbt-runner**: Execute dbt commands after project setup
 - **sql-executor**: Load CSV data into SQL Server
 - **data-profiler**: Profile source data before modeling
-- **tmdl-scaffold**: Initialize Power BI semantic models
+- **pbip-from-dbt**: Generate a Power BI Project (PBIP) from the completed dbt pipeline

@@ -1,5 +1,7 @@
 # Plan — Backlog refresh from cross-plugin learnings + agent memory
 
+> **Status: Completed** (executed; verified 2026-05-29). The proposed additions below have been applied — I-064–I-067 exist in `_Plan/Issues.md` and the "Cross-plugin learnings adoption" epic + rows exist in `_Plan/Backlog.md`. This file is retained as the historical plan record. The "Proposed …" tables below are point-in-time snapshots and are now superseded by the live trackers.
+
 ## Context
 
 The user asked: *"Check all the new learnings and failures in all the repos under the Plugin folder (also memory files for agents) and update the backlog with potential improvements to this Plugin."*

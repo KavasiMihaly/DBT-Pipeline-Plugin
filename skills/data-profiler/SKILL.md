@@ -143,21 +143,21 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --fi
 
 **Output**: Detailed logging of profiling process
 
-### Custom output directory
+### Custom output filename
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file customers.csv --output-dir "path/to/custom/location"
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file customers.csv --output "custom_profile.json"
 ```
 
 **Default Behavior**:
-- Profiles are saved to `1 - Documentation/data-profiles/` by default
+- Profiles are always saved to `1 - Documentation/data-profiles/`
 - This ensures profiles are persisted, version controlled, and accessible to all agents
-- JSON format is used by default for structured data
+- The filename is auto-generated from the table/file name (e.g. `profile_customers.json`)
 
-**Custom Location**:
-- Use `--output-dir` to specify alternative location
-- Useful for temporary analysis or agent-specific workflows
-- Example: `--output-dir "6 - Data Exports"` for transient data
+**Custom Filename**:
+- Use `--output` to specify an alternative filename inside `1 - Documentation/data-profiles/`
+- The output directory is fixed — only the filename is configurable
+- Example: `--output "baseline.csv"` to name a baseline snapshot
 
 ## CSV Type Inference
 
@@ -737,9 +737,9 @@ set PYTHONIOENCODING=utf-8
 python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file data.csv
 ```
 
-3. **Redirect output to file**:
+3. **Save to a named file with `--output`** (no shell redirection needed):
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file data.csv > profile_output.txt
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --file data.csv --format json --output profile_output.json
 ```
 
 **Note**: JSON format is recommended for Claude Code agent workflows to avoid encoding issues entirely.
@@ -821,7 +821,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --ta
 
 ```bash
 # Profile to identify data quality issues
-python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table orders --detailed
+python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table orders --verbose
 
 # Output shows:
 # - order_total has negative values (data quality issue)

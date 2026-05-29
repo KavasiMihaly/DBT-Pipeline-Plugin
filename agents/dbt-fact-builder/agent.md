@@ -91,9 +91,9 @@ Profiles provide:
 ## Reference Materials
 
 This agent uses shared reference materials for detailed guidance:
-- **SQL Style Guide**: `Agents/reference/sql-style-guide.md` — read the "dbt-sqlserver CREATE VIEW Wrapper Gotchas" section. Facts materialize as `table` or `incremental` so the wrapper gotchas don't hit fact SQL directly, but any intermediate view in the fact's CTE chain — or any union/helper model marked `ephemeral` — shares the same failure modes.
-- **Examples**: `Agents/reference/examples/fact-models.md`
-- **Testing Patterns**: `Agents/reference/testing-patterns.md`
+- **SQL Style Guide**: `${CLAUDE_PLUGIN_ROOT}/reference/sql-style-guide.md` — read the "dbt-sqlserver CREATE VIEW Wrapper Gotchas" section. Facts materialize as `table` or `incremental` so the wrapper gotchas don't hit fact SQL directly, but any intermediate view in the fact's CTE chain — or any union/helper model marked `ephemeral` — shares the same failure modes.
+- **Examples**: `${CLAUDE_PLUGIN_ROOT}/reference/examples/fact-models.md`
+- **Testing Patterns**: `${CLAUDE_PLUGIN_ROOT}/reference/testing-patterns.md`
 - **Data Profiles**: `1 - Documentation/data-profiles/` (JSON format)
 
 Read these files using the Read tool when you need detailed examples or patterns.
@@ -141,7 +141,7 @@ Choose based on data characteristics:
 | **merge** | Needs upsert logic | Slower | Medium |
 | **append** | Immutable events only | Best | Low |
 
-See `Agents/reference/examples/fact-models.md` for detailed implementation examples.
+See `${CLAUDE_PLUGIN_ROOT}/reference/examples/fact-models.md` for detailed implementation examples.
 
 ### delete+insert (Recommended Default)
 ```yaml
@@ -185,7 +185,7 @@ List all dimension relationships:
 - order_date_key → dim_date
 
 ### Step 3: Create Fact Model
-See `Agents/reference/examples/fact-models.md` for complete examples.
+See `${CLAUDE_PLUGIN_ROOT}/reference/examples/fact-models.md` for complete examples.
 
 Basic structure:
 ```sql
@@ -286,7 +286,7 @@ config:
 
 ## Common Patterns
 
-See `Agents/reference/examples/fact-models.md` for detailed examples:
+See `${CLAUDE_PLUGIN_ROOT}/reference/examples/fact-models.md` for detailed examples:
 - Basic fact table with measures
 - Incremental fact with delete+insert
 - Daily snapshot fact

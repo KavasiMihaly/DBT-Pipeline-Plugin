@@ -71,16 +71,16 @@ Profiles contain:
 **Read existing profile:**
 ```python
 import json
-with open("1 - Documentation/data-profiles/profile_tablename_TIMESTAMP.json") as f:
+with open("1 - Documentation/data-profiles/profile_tablename.json") as f:
     profile = json.load(f)
 ```
 
 ## Reference Materials
 
 This agent uses shared reference materials for detailed guidance:
-- **SQL Style Guide**: `Agents/reference/sql-style-guide.md` — **read the "dbt-sqlserver CREATE VIEW Wrapper Gotchas" section before writing any staging model**. Staging models default to `materialized='view'`, so all three gotchas (unaliased literals, stripped `OPTION (MAXRECURSION)`, nested-CTE `dbt_utils.date_spine`) apply.
-- **Examples**: `Agents/reference/examples/staging-models.md`
-- **Testing Patterns**: `Agents/reference/testing-patterns.md`
+- **SQL Style Guide**: `${CLAUDE_PLUGIN_ROOT}/reference/sql-style-guide.md` — **read the "dbt-sqlserver CREATE VIEW Wrapper Gotchas" section before writing any staging model**. Staging models default to `materialized='view'`, so all three gotchas (unaliased literals, stripped `OPTION (MAXRECURSION)`, nested-CTE `dbt_utils.date_spine`) apply.
+- **Examples**: `${CLAUDE_PLUGIN_ROOT}/reference/examples/staging-models.md`
+- **Testing Patterns**: `${CLAUDE_PLUGIN_ROOT}/reference/testing-patterns.md`
 - **Data Profiles**: `1 - Documentation/data-profiles/` (JSON format)
 
 Read these files using the Read tool when you need detailed examples or patterns.
@@ -219,7 +219,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-runner/scripts/run_dbt.py" test --selec
 
 ## Standard Staging Template
 
-See `Agents/reference/examples/staging-models.md` for complete examples.
+See `${CLAUDE_PLUGIN_ROOT}/reference/examples/staging-models.md` for complete examples.
 
 Basic structure:
 ```sql
@@ -322,7 +322,7 @@ The data-profiler skill provides intelligence for staging model decisions:
 
 4. **Add appropriate tests** to YAML based on profile
 
-See `Agents/reference/examples/staging-models.md` for complete profile-driven development examples.
+See `${CLAUDE_PLUGIN_ROOT}/reference/examples/staging-models.md` for complete profile-driven development examples.
 
 ## Development Workflow
 
@@ -347,7 +347,7 @@ mcp__sql-server-mcp__get_table_schema --tableName "raw.your_table"
 python "${CLAUDE_PLUGIN_ROOT}/skills/data-profiler/scripts/profile_data.py" --table raw_source_table --schema raw --verbose
 ```
 
-Review profile output in `1 - Documentation/data-profiles/profile_TABLE_TIMESTAMP.json`
+Review profile output in `1 - Documentation/data-profiles/profile_TABLE.json`
 
 **Check for existing profiles first:**
 ```bash
@@ -358,7 +358,7 @@ ls "1 - Documentation/data-profiles/"
 If a profile already exists for your source table, read it instead of re-profiling:
 ```bash
 # Read existing profile
-cat "1 - Documentation/data-profiles/profile_tablename_TIMESTAMP.json"
+cat "1 - Documentation/data-profiles/profile_tablename.json"
 ```
 
 ### Step 3: Create Source YAML (read-before-write)
@@ -437,7 +437,7 @@ In the `renamed` CTE, always rename reserved words to descriptive names (e.g., `
 
 ## Common Patterns
 
-For detailed SQL examples of common staging patterns, see `Agents/reference/examples/staging-models.md`:
+For detailed SQL examples of common staging patterns, see `${CLAUDE_PLUGIN_ROOT}/reference/examples/staging-models.md`:
 - Basic staging (simple rename and type cast)
 - Null handling with COALESCE
 - Multiple sources union
@@ -517,7 +517,7 @@ Minimum tests for staging models:
 - **Categorical columns**: accepted_values
 - **Critical attributes**: not_null (if business requires)
 
-See `Agents/reference/testing-patterns.md` for comprehensive testing guidance.
+See `${CLAUDE_PLUGIN_ROOT}/reference/testing-patterns.md` for comprehensive testing guidance.
 
 ## Success Criteria
 
@@ -580,7 +580,7 @@ Task(
 **Good** (specific, actionable):
 ```
 Create staging model for raw.customers in erp source. Profile at
-1-Documentation/data-profiles/profile_customers.json. customer_id is primary key.
+1 - Documentation/data-profiles/profile_customers.json. customer_id is primary key.
 ```
 
 **Bad** (vague, missing context):

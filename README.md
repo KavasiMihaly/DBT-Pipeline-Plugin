@@ -9,9 +9,9 @@ A Claude Code plugin that automates the full dbt workflow on SQL Server: profile
 ## Features
 
 - **9 Agents** — from business analysis and data exploration through staging, dimension, fact, and test generation, to a pipeline orchestrator and validator
-- **8 Skills** — connection management, SQL execution, schema reading, data profiling, dbt project init, dbt runs, doc generation, and test-coverage analysis
+- **9 Skills** — connection management, SQL execution, schema reading, data profiling, dbt project init, dbt runs, doc generation, test-coverage analysis, and Power BI Project (PBIP) generation
 - **Bundled MCP server** — `sql-server-mcp` (Node.js) for SQL Server introspection and query execution, shipped prebuilt in `servers/dist/`
-- **3 Hooks** — structural validation on every Write/Edit, plus worktree create/remove automation
+- **4 Hooks** — structural validation on every Write/Edit, a Bash allowlist that auto-approves plugin-internal scripts for background agents, plus worktree create/remove automation
 - **Reference docs** — SQL style guide and testing patterns bundled for the agents to consult
 
 ---
@@ -30,22 +30,24 @@ Before installing, make sure you have:
 
 ## Installation
 
-### 1. Add this repo as a marketplace
+### 1. Add the marketplace
+
+This plugin is distributed through the **`OneDayBI-Marketplace`**, hosted in the [AI-plugins](https://github.com/KavasiMihaly/AI-plugins) repo (this repo contains only the plugin itself):
 
 ```
-/plugin marketplace add KavasiMihaly/DBT-Pipeline-Plugin
+/plugin marketplace add KavasiMihaly/AI-plugins
 ```
 
 Or with a full URL:
 
 ```
-/plugin marketplace add https://github.com/KavasiMihaly/DBT-Pipeline-Plugin
+/plugin marketplace add https://github.com/KavasiMihaly/AI-plugins
 ```
 
 ### 2. Install the plugin
 
 ```
-/plugin install dbt-pipeline-toolkit@dbt-pipeline-toolkit
+/plugin install dbt-pipeline-toolkit@OneDayBI-Marketplace
 ```
 
 Or open the interactive picker:
@@ -140,6 +142,7 @@ Invoke directly via the `Agent` tool, or let Claude pick them automatically.
 - **`dbt-runner`** — `dbt run` / `dbt test` / `dbt build`
 - **`dbt-docs-generator`** — build and serve dbt docs
 - **`dbt-test-coverage-analyzer`** — report which models lack tests
+- **`pbip-from-dbt`** — generate an openable Power BI Project (PBIP) from the finished dbt star schema (sources-only, refresh in Power BI Desktop)
 
 ### MCP tools (`sql-server-mcp`)
 
@@ -148,6 +151,7 @@ The bundled Node MCP server exposes SQL Server connection and query tools used b
 ### Hooks
 
 - **PreToolUse (`Write` | `Edit`)** — runs `hooks/validate-dbt-structure.py` to enforce dbt folder/file conventions before edits are written
+- **PreToolUse (`Bash`)** — runs `hooks/approve-plugin-bash.py` to auto-approve plugin-internal scripts (a narrow allowlist) so background agents don't stall on permission prompts
 - **WorktreeCreate** — runs `hooks/create-worktree.py` to set up an isolated workspace
 - **WorktreeRemove** — runs `hooks/remove-worktree.py` to tear it down cleanly
 
@@ -157,11 +161,11 @@ The bundled Node MCP server exposes SQL Server connection and query tools used b
 
 ```
 .claude-plugin/
-  ├── marketplace.json     # marketplace manifest
   └── plugin.json          # plugin manifest (agents, skills, hooks, MCP, userConfig)
+                           # NOTE: no marketplace.json here — the marketplace lives in the AI-plugins repo
 agents/                    # 9 bundled agents
-skills/                    # 8 bundled skills
-hooks/                     # validate-dbt-structure.py, create-worktree.py, remove-worktree.py
+skills/                    # 9 bundled skills
+hooks/                     # validate-dbt-structure.py, approve-plugin-bash.py, create-worktree.py, remove-worktree.py
 servers/
   ├── src/                 # TypeScript source for sql-server-mcp
   ├── dist/                # prebuilt JS (minimal-mcp-server.js, database.js)
@@ -185,11 +189,13 @@ cd DBT-Pipeline-Plugin
 cd servers && npm install && npm run build && cd ..
 ```
 
-Point Claude Code at your local checkout instead of the GitHub marketplace:
+This repo has no `marketplace.json`, so to test the plugin locally either point Claude Code at a local checkout of the [AI-plugins](https://github.com/KavasiMihaly/AI-plugins) marketplace that references it, or load this checkout directly:
 
 ```
-/plugin marketplace add /absolute/path/to/DBT-Pipeline-Plugin
+claude --plugin-dir /absolute/path/to/DBT-Pipeline-Plugin
 ```
+
+> Note: local `--plugin-dir` dev hides several install-time behaviours (agent namespacing, frontmatter stripping, `${CLAUDE_PLUGIN_ROOT}` resolution). Always verify changes on a fresh marketplace install before release — see `CLAUDE.md` → "Plugin Gotchas".
 
 After editing agents/skills/hooks, run `/reload-plugins`. After editing the MCP server, rebuild (`npm run build`) and fully restart Claude Code.
 
@@ -199,7 +205,7 @@ After editing agents/skills/hooks, run `/reload-plugins`. After editing the MCP 
 
 | Symptom                                              | Fix                                                                         |
 |------------------------------------------------------|-----------------------------------------------------------------------------|
-| `Marketplace "KavasiMihaly/DBT-Pipeline-Plugin" not found` | Run `/plugin marketplace add` before `/plugin install`.                     |
+| `Marketplace "OneDayBI-Marketplace" not found`        | Run `/plugin marketplace add KavasiMihaly/AI-plugins` before `/plugin install`. |
 | Plugin installs but `sql-server-mcp` tools missing   | Fully restart Claude Code — MCP tools register on fresh sessions only.     |
 | `sql-server-mcp` fails to start                      | Check Node `>= 18` is on PATH; verify `servers/dist/minimal-mcp-server.js` exists. |
 | Connection fails to Azure SQL                        | Set `sql_encrypt=true` and `sql_trust_cert=false`.                          |
@@ -214,7 +220,7 @@ After editing agents/skills/hooks, run `/reload-plugins`. After editing the MCP 
 
 ```
 /plugin                                                      # open manager, select Uninstall
-/plugin marketplace remove dbt-pipeline-toolkit              # remove the marketplace too
+/plugin marketplace remove OneDayBI-Marketplace             # remove the marketplace too
 ```
 
 Or manually delete `~/.claude/plugins/cache/dbt-pipeline-toolkit/` and run `/reload-plugins`.

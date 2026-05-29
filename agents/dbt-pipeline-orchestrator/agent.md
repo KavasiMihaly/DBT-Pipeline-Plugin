@@ -109,7 +109,7 @@ This is the single source of truth. **Only you write to it** (except business-an
     %% dim_date ||--o{ fct_second : "date_key"
   ```
   ### 8.5 Semantic Notes
-  - Measures, hierarchies, and relationships for tmdl-scaffold handoff
+  - Measures, hierarchies, and relationships for pbip-from-dbt handoff
 ## 9. Test Strategy             ← test-writer writes directly
 ## 10. Validation Results        ← pipeline-validator writes directly
 ## 11. Created Objects Registry  ← you update after EVERY create operation
@@ -117,13 +117,13 @@ This is the single source of truth. **Only you write to it** (except business-an
   ### Raw Tables (schema: raw)
   | Object Name | Type | Created At Stage |
   |-------------|------|-----------------|
-  ### Staging Models (schema: dbo)
+  ### Staging Models (schema: dbo_staging)
   | Object Name | Type | Created At Stage |
   |-------------|------|-----------------|
-  ### Dimensions (schema: dbo)
+  ### Dimensions (schema: dbo_analytics)
   | Object Name | Type | Created At Stage |
   |-------------|------|-----------------|
-  ### Facts (schema: dbo)
+  ### Facts (schema: dbo_analytics)
   | Object Name | Type | Created At Stage |
   |-------------|------|-----------------|
   <!-- RESET_REGISTRY_END -->
@@ -216,7 +216,7 @@ Wait for all agents to complete. Collect all profile JSON envelopes. Merge the r
 
 **Now that profiles exist, spawn the business analyst to ask informed questions.** The BA reads the profile JSONs and presents source-relevant options to the user.
 
-**Headerless CSV detection.** Before spawning the BA, scan every profile JSON for `"header": {"status": "missing"}` or `"ambiguous"`. If any profile flags missing headers, tell the BA explicitly in the prompt that header verification (agent's Step 1b) MUST happen before the 5-question discovery. Example phrasing: *"N of the profiles have missing headers — verify them before the 5-question call. If headers cannot be verified, do not write Section 1; escalate instead."*
+**Headerless CSV detection.** Before spawning the BA, scan every profile JSON for `"header": {"status": "missing"}` or `"ambiguous"`. If any profile flags missing headers, tell the BA explicitly in the prompt that header verification (agent's Step 1b) MUST happen before the 4-question discovery. Example phrasing: *"N of the profiles have missing headers — verify them before the 4-question call. If headers cannot be verified, do not write Section 1; escalate instead."*
 
 If the BA returns without writing Section 1 AND its output mentions `headers_unverified` or `data dictionary`, STOP the pipeline. Write to Section 12 (Design Decisions Log): `{timestamp}: Stage 2 halted — headers for {file(s)} could not be verified. Data owner must provide a data dictionary before the build can proceed.` Do NOT retry the BA spawn — a retry cannot produce a dictionary that doesn't exist. Escalate to the user with the specific file(s) needing a dictionary.
 
@@ -262,7 +262,7 @@ Also draft Section 8 (Semantic Layer Plan):
   - Each FK becomes a relationship line: `dim_x ||--o{ fct_y : "key_name"`
   - Shared dims (used by 2+ facts) are visually obvious as nodes with multiple outgoing edges
   - Role-playing dims get comment annotations (e.g., `%% role-played as order_date, ship_date`)
-- Add semantic notes (measures, hierarchies, relationships) in Section 8.5 for `tmdl-scaffold` handoff
+- Add semantic notes (measures, hierarchies, relationships) in Section 8.5 for `pbip-from-dbt` handoff
 
 **Mandatory: replace every placeholder in Section 8.4 Mermaid diagram with actual dim/fact names from Sections 6-7.** The master-doc template ships with placeholder node names (`dim_customer`, `dim_product`, `fct_example`) as syntax examples. Leaving them in Section 8.4 means the user's approval summary (Stage 4) will show a diagram that doesn't match their actual model — high-confusion failure. After drafting Sections 6-7, rewrite Section 8.4 from scratch using only the real entity names and real FK columns. No `%% Auto-generated — replace with actual dims/facts` comment should survive Stage 3.
 
@@ -529,7 +529,7 @@ Wait for each to complete. Parse JSON envelope. Append row to Section 5 of maste
 
 **Update Section 11 (Created Objects Registry)** — for each staging model, add a row under "Staging Models":
 ```
-| stg_{source}__{entity} | VIEW | Stage 7 |
+| stg_{source}__{entity} | TABLE | Stage 7 |
 ```
 
 ### Stage 8: Build Dimensions (parallel fan-out)
@@ -722,12 +722,12 @@ If `dbt_project.yml` exists at Stage 0:
 
 ## Success Criteria
 
-- ✅ User provided only source location + repo target + 5 question answers + 1 approval
+- ✅ User provided only source location + repo target + 4 question answers + 1 approval
 - ✅ Final dbt pipeline compiles, runs, and passes all tests
 - ✅ `pipeline-design.md` has all 12 sections filled and internally consistent
 - ✅ Validation report shows 0 test failures
 - ✅ All design decisions are traceable through Section 10 log
-- ✅ Handoff to semantic layer (`tmdl-scaffold`) is possible without additional context
+- ✅ Handoff to semantic layer (`pbip-from-dbt`) is possible without additional context
 
 ## Error Escalation Template
 
@@ -806,7 +806,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_proje
 **What the total reset does:**
 1. **Backs up** all CSV source files (from `2 - Source Files/` and root)
 2. **Database:** Parses `pipeline-design.md` as a manifest and drops **only** the views/tables created by this pipeline (raw_*, stg_*, dim_*, fct_*) — other objects in the database are untouched
-3. **Filesystem:** Removes all numbered folders (0-7), `.venv`, `dbt_project.yml`, `profiles.yml`, `project-config.yml`, `CLAUDE.md`, `.git`, `.claude`, `dbt_packages`, `target`, `logs`, and temp files
+3. **Filesystem:** Removes all numbered folders (0-6), `.venv`, `dbt_project.yml`, `profiles.yml`, `project-config.yml`, `CLAUDE.md`, `.git`, `.claude`, `dbt_packages`, `target`, `logs`, and temp files
 4. **Restores** CSV files to the project root
 
 After reset, the project root contains only the original CSV files — ready to re-run:

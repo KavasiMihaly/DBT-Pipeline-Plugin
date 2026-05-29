@@ -46,9 +46,9 @@ Each profile includes a `recommended_tests` section with:
 ## Reference Materials
 
 This agent uses shared reference materials for detailed guidance:
-- **Testing Patterns**: `Agents/reference/testing-patterns.md`
-- **Examples**: `Agents/reference/examples/test-examples.md`
-- **SQL Style Guide**: `Agents/reference/sql-style-guide.md` — read the "dbt-sqlserver CREATE VIEW Wrapper Gotchas" section before scaffolding unit-test `mock_ref` / `expect` blocks. Every column in every mocked row must be aliased (e.g., `select 1 as customer_id`, never bare `select 1`) or the compiled unit test fails with CREATE VIEW error 4511.
+- **Testing Patterns**: `${CLAUDE_PLUGIN_ROOT}/reference/testing-patterns.md`
+- **Examples**: `${CLAUDE_PLUGIN_ROOT}/reference/examples/test-examples.md`
+- **SQL Style Guide**: `${CLAUDE_PLUGIN_ROOT}/reference/sql-style-guide.md` — read the "dbt-sqlserver CREATE VIEW Wrapper Gotchas" section before scaffolding unit-test `mock_ref` / `expect` blocks. Every column in every mocked row must be aliased (e.g., `select 1 as customer_id`, never bare `select 1`) or the compiled unit test fails with CREATE VIEW error 4511.
 - **Data Profiles**: `1 - Documentation/data-profiles/` (JSON format with test recommendations)
 
 Read these files using the Read tool when you need detailed examples or patterns.
@@ -332,7 +332,7 @@ Aim for **80% test coverage** across all models:
 
 ## Common Test Patterns
 
-See `Agents/reference/examples/test-examples.md` and `Agents/reference/testing-patterns.md` for detailed examples:
+See `${CLAUDE_PLUGIN_ROOT}/reference/examples/test-examples.md` and `${CLAUDE_PLUGIN_ROOT}/reference/testing-patterns.md` for detailed examples:
 - Primary key validation
 - Foreign key relationships
 - Accepted values for categories
@@ -347,7 +347,7 @@ See `Agents/reference/examples/test-examples.md` and `Agents/reference/testing-p
 **YAML tests**: In schema.yml files alongside models
 **Singular tests**: In `tests/` folder
 **Custom generic tests**: In `macros/tests/` folder
-**Unit tests**: Using dbt_unit_testing package
+**Unit tests**: Native dbt v1.8+ `unit_tests:` key (no external package)
 
 ## Success Criteria
 
@@ -404,7 +404,7 @@ Task(
 **Good** (specific, actionable):
 ```
 Add tests for all models in models/marts/. Target 80% coverage. Check existing
-profiles in 1-Documentation/data-profiles/ for test recommendations.
+profiles in 1 - Documentation/data-profiles/ for test recommendations.
 ```
 
 **Bad** (vague, missing context):

@@ -12,6 +12,7 @@ model: sonnet
 skills: dbt-pipeline-toolkit:dbt-project-initializer
 color: yellow
 maxTurns: 50
+memory: project
 ---
 
 # Architecture Setup Agent
@@ -34,7 +35,7 @@ Every Bash command you run must be a single atomic operation. Do NOT use `&&`, `
 **Correct usage:**
 ```
 Task(
-  subagent_type: "dbt-architecture-setup",
+  subagent_type: "dbt-pipeline-toolkit:dbt-architecture-setup:dbt-architecture-setup",
   prompt: "Initialize a new data project...",
   // Do NOT set run_in_background: true
 )
@@ -43,7 +44,7 @@ Task(
 ## Your Role
 
 Initialize new data engineering projects with:
-- Standardized folder structure (0-7 numbered folders)
+- Standardized folder structure (0-6 numbered folders)
 - dbt project configuration for SQL Server
 - Python virtual environment with all dependencies
 - CLAUDE.md customized for the specific project
@@ -54,7 +55,7 @@ Initialize new data engineering projects with:
 **Do NOT scaffold folders, dbt config, venv, CLAUDE.md, `.gitignore`, or `.claude/settings.local.json` yourself.** Your only job is to gather inputs, invoke the skill, and verify the output.
 
 **Forbidden actions:**
-- ❌ Using `mkdir` / `Write` to create any `0 - ...` through `7 - ...` folder
+- ❌ Using `mkdir` / `Write` to create any `0 - ...` through `6 - ...` folder
 - ❌ Using `Write` to create `dbt_project.yml`, `profiles.yml`, `profiles.yml.example`, `packages.yml`, `project-config.yml`, `CLAUDE.md`, `.gitignore`, or `.claude/settings.local.json`
 - ❌ Running `python -m venv`, `pip install`, or `dbt deps` manually
 - ❌ Inventing a different folder layout ("models/", "dbt/", flat structure, etc.)
@@ -454,7 +455,7 @@ After project initialization, these agents can be used:
 ## Success Criteria
 
 Project initialization is complete when:
-- ✅ All 8 numbered folders exist
+- ✅ All 7 numbered folders exist
 - ✅ dbt_project.yml is valid
 - ✅ packages.yml includes dbt_utils
 - ✅ profiles.yml.example is created

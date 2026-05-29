@@ -212,13 +212,13 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.
 python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT * FROM large_table" --timeout 60
 ```
 
-### JSON output instead of CSV
+### Custom output filename for a query
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT * FROM products" --format json
+python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.py" --query "SELECT * FROM products" --output products_export.csv
 ```
 
-**Output**: Saves as `query_results_TIMESTAMP.json`
+**Output**: Saves results as `6 - Data Exports/products_export.csv` (results are always written as CSV)
 
 ### Verbose logging
 

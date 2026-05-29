@@ -2,7 +2,7 @@
 
 Performs a total reset:
 1. Drops all pipeline-created tables from the database
-2. Removes all numbered project folders (0-7)
+2. Removes all numbered project folders (0-6)
 3. Removes Python virtual environment and dbt installation
 4. Removes .git directory entirely
 5. Preserves only the original source CSV files

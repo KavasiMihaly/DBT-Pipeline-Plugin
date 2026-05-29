@@ -3,7 +3,7 @@
 Project Initializer Script
 
 Creates a complete data engineering project structure with:
-- Numbered folder hierarchy (0-7)
+- Numbered folder hierarchy (0-6)
 - dbt project configuration
 - Python virtual environment
 - CLAUDE.md for agentic development

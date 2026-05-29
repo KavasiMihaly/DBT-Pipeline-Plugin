@@ -85,9 +85,9 @@ Profiles provide:
 ## Reference Materials
 
 This agent uses shared reference materials for detailed guidance:
-- **SQL Style Guide**: `Agents/reference/sql-style-guide.md`
-- **Examples**: `Agents/reference/examples/dimension-models.md`
-- **Testing Patterns**: `Agents/reference/testing-patterns.md`
+- **SQL Style Guide**: `${CLAUDE_PLUGIN_ROOT}/reference/sql-style-guide.md`
+- **Examples**: `${CLAUDE_PLUGIN_ROOT}/reference/examples/dimension-models.md`
+- **Testing Patterns**: `${CLAUDE_PLUGIN_ROOT}/reference/testing-patterns.md`
 - **Data Profiles**: `1 - Documentation/data-profiles/` (JSON format)
 
 Read these files using the Read tool when you need detailed examples or patterns.
@@ -174,7 +174,7 @@ select * from final
 
 Use dbt snapshots for tracking historical changes.
 
-See `Agents/reference/examples/dimension-models.md` for complete SCD Type 2 examples.
+See `${CLAUDE_PLUGIN_ROOT}/reference/examples/dimension-models.md` for complete SCD Type 2 examples.
 
 ## Development Workflow
 
@@ -189,7 +189,7 @@ Choose descriptive columns to include:
 - Hierarchical attributes
 
 ### Step 3: Create Dimension Model
-See `Agents/reference/examples/dimension-models.md` for complete examples.
+See `${CLAUDE_PLUGIN_ROOT}/reference/examples/dimension-models.md` for complete examples.
 
 Basic structure:
 ```sql
@@ -251,7 +251,7 @@ Group attributes logically:
 
 ## Common Patterns
 
-See `Agents/reference/examples/dimension-models.md` for detailed examples:
+See `${CLAUDE_PLUGIN_ROOT}/reference/examples/dimension-models.md` for detailed examples:
 - Basic dimension with surrogate key
 - Dimension with hierarchies
 - Role-playing dimension (single dimension, multiple contexts)
@@ -282,11 +282,11 @@ Create once and reuse across all fact tables:
 - Fiscal attributes: fiscal_year, fiscal_quarter
 - Flags: is_weekend, is_holiday, is_business_day
 
-See `reference/examples/dimension-models.md` for complete date dimension example.
+See `${CLAUDE_PLUGIN_ROOT}/reference/examples/dimension-models.md` for complete date dimension example.
 
 ### CRITICAL: Never use `dbt_utils.date_spine()` on SQL Server
 
-This is one of three related dbt-sqlserver failure modes documented together in `reference/sql-style-guide.md` → "dbt-sqlserver CREATE VIEW Wrapper Gotchas". Read that section before building `dim_date` or any other dimension that uses literals, recursive CTEs, or date spines.
+This is one of three related dbt-sqlserver failure modes documented together in `${CLAUDE_PLUGIN_ROOT}/reference/sql-style-guide.md` → "dbt-sqlserver CREATE VIEW Wrapper Gotchas". Read that section before building `dim_date` or any other dimension that uses literals, recursive CTEs, or date spines.
 
 `dbt_utils.date_spine()` expands to a **nested `WITH` clause** (`WITH rawdata AS (WITH p0 AS (...), p1 AS (...) ...)`) which T-SQL rejects outright with "Incorrect syntax near the keyword 'with'". This is a T-SQL dialect limitation — `materialized='table'` does NOT help.
 

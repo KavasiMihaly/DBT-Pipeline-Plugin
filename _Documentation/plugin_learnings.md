@@ -2,7 +2,7 @@
 
 Working notes and discoveries from building the `dbt-pipeline-toolkit` Claude Code plugin. Intended as source material for a conference presentation on **agentic tooling in data engineering**.
 
-The plugin packages 9 specialized agents, 8 skills, 3 hooks, and an MCP server into a single installable unit distributed through an external marketplace repo (`AI-plugins`). The goal was end-to-end automation: drop CSVs in a folder, get a tested dbt star schema on SQL Server.
+The plugin packages 9 specialized agents, 9 skills, 4 hooks, and an MCP server into a single installable unit distributed through an external marketplace repo (`AI-plugins`, marketplace name `OneDayBI-Marketplace`). The goal was end-to-end automation: drop CSVs in a folder, get a tested dbt star schema on SQL Server.
 
 Everything in this doc is the result of things that **actually broke** when the plugin was installed on a second machine — not theory.
 
@@ -610,16 +610,12 @@ From the Claude Code permissions docs:
 PreToolUse hooks can auto-approve a tool call. The hook contract is an exit-code-0 JSON emit on stdout:
 
 ```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "allow",
-    "permissionDecisionReason": "<human-readable explanation>"
-  }
-}
+{ "decision": "approve", "reason": "<human-readable explanation>" }
 ```
 
-When a PreToolUse hook returns `permissionDecision: "allow"`, the permission prompt is skipped entirely — which is exactly what we need for background subagents. And crucially, per Finding 2, **plugin-level hooks are fully supported**: it's only agent-frontmatter hooks that are stripped. So a plugin can ship a PreToolUse hook at the plugin level, register it in `plugin.json`, and have it fire for every Bash tool call across every subagent in every session where the plugin is enabled.
+> **Correction (2026-04-16, tracked as I-031):** the first version of this hook emitted a *nested* `{"hookSpecificOutput": {"permissionDecision": "allow", ...}}` shape — that format is **wrong** for PreToolUse hooks; Claude Code did not recognise it and treated every call as a hook error. The correct contract is the flat `{"decision": "approve|block|skip", "reason": "..."}` shown above (an empty `{}` means "no opinion → defer to default flow"). The talk should show the flat format; the nested form is the bug, not the fix.
+
+When a PreToolUse hook returns `{"decision": "approve"}`, the permission prompt is skipped entirely — which is exactly what we need for background subagents. And crucially, per Finding 2, **plugin-level hooks are fully supported**: it's only agent-frontmatter hooks that are stripped. So a plugin can ship a PreToolUse hook at the plugin level, register it in `plugin.json`, and have it fire for every Bash tool call across every subagent in every session where the plugin is enabled.
 
 The fix we applied:
 

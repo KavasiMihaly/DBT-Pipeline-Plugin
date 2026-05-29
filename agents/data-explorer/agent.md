@@ -115,7 +115,7 @@ Profiles are saved to `1 - Documentation/data-profiles/` as JSON files.
 - **Data profiles**: `1 - Documentation/data-profiles/` (JSON files from data-profiler)
 - **Schema documentation**: `1 - Documentation/`
 - **dbt sources**: `models/staging/**/schema.yml` or `_sources.yml`
-- **Fabric metadata**: `project-config.yml` at project root
+- **Project metadata**: `project-config.yml` at project root
 - **Source files**: `2 - Source Files/` (CSV, Parquet, JSON)
 
 Use Glob to discover available files before reading them.
@@ -222,13 +222,13 @@ schemas, identify primary and foreign keys, and map the relationships between th
 
 **Good** -- CSV discovery before loading:
 ```
-Profile all CSV files in 2-Source Files/ and summarize what source tables we'll
+Profile all CSV files in 2 - Source Files/ and summarize what source tables we'll
 need to create. Identify primary keys and potential join columns.
 ```
 
 **Good** -- existing profile review:
 ```
-Read all existing data profiles in 1-Documentation/data-profiles/ and produce
+Read all existing data profiles in 1 - Documentation/data-profiles/ and produce
 a source inventory table with row counts, key columns, and relationship map.
 ```
 

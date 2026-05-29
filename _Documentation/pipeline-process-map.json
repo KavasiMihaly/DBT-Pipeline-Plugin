@@ -88,7 +88,7 @@
     { "id": "n_s11_artifact", "label": "Section 10 of pipeline-design.md (no separate report)", "type": "artifact", "lane": "lane_artifacts", "stage": 11 },
 
     { "id": "n_s12", "label": "Stage 12: Handoff Summary — Status = Validated", "type": "orchestrator", "lane": "lane_orchestrator", "stage": 12 },
-    { "id": "n_end", "label": "Tested dbt pipeline — next: tmdl-scaffold for Power BI semantic layer", "type": "artifact", "lane": "lane_artifacts", "stage": "end" }
+    { "id": "n_end", "label": "Tested dbt pipeline — next: pbip-from-dbt for Power BI semantic layer", "type": "artifact", "lane": "lane_artifacts", "stage": "end" }
   ],
   "edges": [
     { "from": "n0_start", "to": "n_pre", "label": "invoke" },
@@ -173,7 +173,7 @@
     { "name": "Atomic Bash only (no &&/||/|/;)", "enforced_at": "Plugin-wide", "failure_mode": "PreToolUse hook falls through → stalled background agent" }
   ],
   "user_touch_points": [
-    { "stage": 2, "mechanism": "AskUserQuestion", "purpose": "5 discovery questions on goals, consumers, metrics, time grain, target DB" },
+    { "stage": 2, "mechanism": "AskUserQuestion", "purpose": "4 discovery questions on goals, consumers, metrics, time grain" },
     { "stage": 4, "mechanism": "ExitPlanMode", "purpose": "Approve or revise proposed data model" }
   ],
   "parallelism": {

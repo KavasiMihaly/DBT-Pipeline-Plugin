@@ -8,7 +8,7 @@
 
 ## Overview
 
-This project uses the **`dbt-pipeline-toolkit`** Claude Code plugin for automated dbt pipeline construction. The plugin ships 9 specialized agents (orchestrator + 8 specialists) and 8 skills that collectively handle source profiling, project scaffolding, staging model generation, dimension/fact modeling, test writing, and end-to-end validation. It was installed from the `OneDayBI-Marketplace` marketplace. If you need to re-install or update, run `/plugin update dbt-pipeline-toolkit@OneDayBI-Marketplace` in Claude Code.
+This project uses the **`dbt-pipeline-toolkit`** Claude Code plugin for automated dbt pipeline construction. The plugin ships 9 specialized agents (orchestrator + 8 specialists) and 9 skills that collectively handle source profiling, project scaffolding, staging model generation, dimension/fact modeling, test writing, end-to-end validation, and Power BI Project (PBIP) generation. It was installed from the `OneDayBI-Marketplace` marketplace (hosted in the `KavasiMihaly/AI-plugins` repo). If you need to re-install or update, run `/plugin update dbt-pipeline-toolkit@OneDayBI-Marketplace` in Claude Code.
 
 Plugin-shipped skills are visible in the `/skills` menu under the `dbt-pipeline-toolkit:` namespace (e.g., `dbt-pipeline-toolkit:data-profiler`, `dbt-pipeline-toolkit:dbt-runner`). Plugin-shipped agents are visible in `/agents` under a 3-part namespace (e.g., `dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator`). Skills and agents marked "locked by plugin" are managed by the plugin lifecycle — they live in the plugin cache and cannot be edited in place.
 
@@ -82,7 +82,7 @@ Use the Agent tool with `subagent_type` matching the agent name:
 
 ```
 Agent tool with:
-  subagent_type: "dbt-staging-builder"
+  subagent_type: "dbt-pipeline-toolkit:dbt-staging-builder:dbt-staging-builder"
   prompt: "Create staging model for the orders table in source X"
 ```
 
@@ -96,7 +96,7 @@ Agent tool with:
 
 ## Master Design Document: `1 - Documentation/pipeline-design.md`
 
-This is the single source of truth for pipeline design decisions. Every specialist agent reads it before starting work. It contains 10 sections:
+This is the single source of truth for pipeline design decisions. Every specialist agent reads it before starting work. It contains 12 sections:
 
 1. Requirements (business goals, KPIs, consumers)
 2. Source Inventory
@@ -105,11 +105,13 @@ This is the single source of truth for pipeline design decisions. Every speciali
 5. Staging Layer Plan
 6. Dimension Plan
 7. Fact Plan
-8. Test Strategy
-9. Validation Results
-10. Design Decisions Log
+8. Semantic Layer Plan
+9. Test Strategy
+10. Validation Results
+11. Created Objects Registry
+12. Design Decisions Log
 
-**Do not modify this file manually while specialists are running.** The orchestrator owns its writes. If working without the orchestrator, specialists write their own sections (1, 8, 9) and return JSON envelopes for the orchestrator-owned sections (2-7).
+**Do not modify this file manually while specialists are running.** The orchestrator owns its writes. If working without the orchestrator, the specialists that have no parallel peer at their stage write their own sections (business-analyst → Section 1, dbt-test-writer → Section 9, dbt-pipeline-validator → Section 10); all other sections are orchestrator-owned and specialists return JSON envelopes for them.
 
 ## Schema YAML Convention (Parallel-Safe)
 
@@ -178,13 +180,15 @@ End-to-end validation of completed pipelines.
 
 | Skill | Purpose | Example |
 |-------|---------|---------|
+| `sql-connection` | Configure/manage the SQL Server connection | `/sql-connection --preset local --database mydb` |
 | `sql-executor` | Load CSV files into SQL Server | `/sql-executor --file data.csv --table raw.data` |
 | `sql-server-reader` | Query SQL Server (read-only) | `/sql-server-reader --query "SELECT * FROM table"` |
 | `data-profiler` | Profile tables for data quality | `/data-profiler --table raw.customers` |
+| `dbt-project-initializer` | Scaffold a new dbt project | `/dbt-project-initializer --target . --name myproj` |
 | `dbt-runner` | Run dbt commands | `/dbt-runner run --select stg_*` |
 | `dbt-docs-generator` | Generate dbt documentation | `/dbt-docs-generator generate` |
 | `dbt-test-coverage-analyzer` | Analyze test coverage | `/dbt-test-coverage-analyzer` |
-| `tmdl-scaffold` | Create Power BI TMDL projects | `/tmdl-scaffold` |
+| `pbip-from-dbt` | Generate a Power BI Project (PBIP) from the finished star schema | `/pbip-from-dbt --output "4 - Semantic Layer" --name MyModel` |
 
 ## Critical: Data Loading Behavior
 
@@ -272,19 +276,22 @@ Drop source CSVs into the repo, then run:
 claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orchestrator "Build a pipeline"
 ```
 
-The orchestrator runs the full 12-stage workflow:
-1. Source discovery (scans repo for CSVs)
-2. Discovery Q&A (4 questions via business-analyst)
-3. Source profiling (data-explorer)
-4. Data model draft (staging + dims + facts + tests)
-5. **Plan approval gate** (user reviews pipeline-design.md summary)
-6. Architecture scaffolding (skipped if already scaffolded — incremental mode)
-7. Load source data (sql-executor skill)
-8. Build staging models (sequential)
-9. Build dimensions (parallel, worktree-isolated)
-10. Build facts (parallel, after dims merged)
-11. Write tests (dbt-test-writer, 80% coverage target)
-12. Validate (dbt-pipeline-validator, full dbt build + tests)
+The orchestrator runs the full 13-stage workflow (Pre-stage + Stages 0–12):
+
+- **Pre-stage** — Connection check (`configure.py --test-only`)
+- **Stage 0** — Source discovery (scans repo for CSVs; decides fresh vs incremental mode)
+- **Stage 1** — Source profiling (data-explorer, one per CSV)
+- **Stage 2** — Discovery Q&A (4 questions) — **user touch point 1**
+- **Stage 3** — Draft proposed data model (staging + dims + facts + semantic layer)
+- **Stage 4** — **Plan approval gate** (user reviews pipeline-design.md summary) — **user touch point 2**
+- **Stage 5** — Architecture scaffolding (skipped if already scaffolded — incremental mode)
+- **Stage 6** — Load source data (sql-executor skill)
+- **Stage 7** — Build staging models (sequential, compile-one-then-scale)
+- **Stage 8** — Build dimensions (parallel, worktree-isolated)
+- **Stage 9** — Build facts (parallel, after dims merged)
+- **Stage 10** — Write tests (dbt-test-writer, 80% coverage target)
+- **Stage 11** — Validate (dbt-pipeline-validator, full dbt build + tests)
+- **Stage 12** — Handoff summary + optional Power BI Project (PBIP) generation via `pbip-from-dbt`
 
 User input total: initial prompt + 4 questions + 1 approval.
 

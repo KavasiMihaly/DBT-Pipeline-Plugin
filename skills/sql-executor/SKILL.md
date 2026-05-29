@@ -238,7 +238,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --patter
 ## Safety Features
 
 - **Transaction Support**: All operations are transactional (rollback on error)
-- **Dry Run Mode**: Use `--dry-run` to preview without executing
+- **Header Verification Gate**: Refuses to load CSVs with unverified/synthetic headers unless `--force-raw-load` is passed
 - **Row Count Validation**: Confirms CSV rows match loaded rows
 - **Schema Validation**: Warns if existing table schema differs from CSV
 
@@ -303,12 +303,12 @@ The dbt-pipeline-validator agent uses this skill to:
 Example workflow in dbt-pipeline-validator:
 ```python
 # Load test data for validation
-Task(skill="sql-executor", 
-     command="python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --pattern '*.csv' --table-prefix raw.source --schema raw")
+Task(skill="sql-executor",
+     command='python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --pattern "*.csv" --table-prefix raw.source --schema raw')
 
 # After dbt build and tests pass, clean up
 Task(skill="sql-executor",
-     command="python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --execute 'TRUNCATE TABLE raw.source_table'")
+     command='python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --execute "TRUNCATE TABLE raw.source_table"')
 ```
 
 ## Best Practices

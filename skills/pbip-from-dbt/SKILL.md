@@ -15,7 +15,7 @@ Generate a valid, openable Power BI Project (PBIP) folder from a completed `dbt-
 - You want parameterised connections (SqlEndpoint + Database) so the same model can target dev/prod
 - You do **not** yet need measures, relationships, or visuals (those are manual in Desktop)
 
-Use `tmdl-scaffold` instead if you want a bare empty semantic model with no dbt context.
+This skill always wires up the dbt-produced `dim_*` / `fct_*` tables. It does not produce a bare empty semantic model — its purpose is to give you a head-start PBIP pre-wired to your pipeline's sources.
 
 ## Prerequisites
 
@@ -263,7 +263,6 @@ The typical automated sequence:
 
 ## Related
 
-- **`tmdl-scaffold`** — minimal empty semantic model (no dbt context, no report shell)
 - **`sql-server-reader`** — read-only introspection of SQL Server (can be used to verify dim/fct tables exist before running this skill)
 - **`dbt-pipeline-orchestrator`** — produces the `pipeline-design.md` that this skill consumes (same plugin, invokes this skill in Stage 12)
 

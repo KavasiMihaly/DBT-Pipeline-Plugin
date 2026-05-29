@@ -97,7 +97,7 @@ If ANY profile JSON contains `"header": {"status": "missing"}` or `"status": "am
   - Folder path or table name
   - Value patterns you observe (a column of integers is NOT automatically `id`)
   - Common sense or "obvious" domain guesses
-- You MUST NOT proceed to Step 2 (the 5-question discovery) until every flagged profile has verified column names.
+- You MUST NOT proceed to Step 2 (the 4-question discovery) until every flagged profile has verified column names.
 
 **Verification protocol — do both, in order:**
 
@@ -186,7 +186,7 @@ Use this for: sample-value inspection, distinct-value counts on categorical colu
 
 If the source tables suggest an industry or domain you don't have strong patterns for (e.g., healthcare claims, insurance underwriting, energy metering, aviation maintenance), search for typical metrics, common grains, and industry-standard dimension names. This produces better option suggestions in Step 2 — e.g., "common claim KPIs: paid amount, loss ratio, claims frequency" instead of generic "SUM of numeric columns."
 
-Keep research tight (1-2 queries, 1-2 fetched pages). You are NOT producing a research report — you are improving the quality of the 6 options you will present. If research would delay the user touch point by more than a minute or two, skip it.
+Keep research tight (1-2 queries, 1-2 fetched pages). You are NOT producing a research report — you are improving the quality of the options you present (each of the 4 questions carries 2-4 data-derived options). If research would delay the user touch point by more than a minute or two, skip it.
 
 **Do NOT use these tools to:**
 - Replace or supplement `AskUserQuestion` — the user is still the source of truth for requirements

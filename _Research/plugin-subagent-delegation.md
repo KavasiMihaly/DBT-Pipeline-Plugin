@@ -111,5 +111,6 @@ The research agent recommended three fallback architectures assuming delegation 
 
 - Re-read Issue #19276 directly (not via the research agent's summary) to understand exactly which agent sources it claimed weren't discoverable by `Task`, and whether that claim specifically excluded plugin-installed agents
 - Empirically test whether our specialist agents receive their own body content when spawned from the orchestrator (per Issue #13627 concern)
+  - **UPDATE 2026-05-29: empirically confirmed body content IS received and followed by spawned specialists — see Issues.md I-047.** I-047 documents that spawned staging-builders followed the bare `python scripts/<file>.py` example commands from their own `agent.md` bodies (which then failed because the path doesn't resolve in user projects). That failure is a counter-proof for the #13627 "body dropped" claim: the body content was clearly in effect. This follow-up is therefore answered — body injection works for our plugin-shipped specialists.
 - Check whether the MCP server tools (`sql-server-mcp:*`) are actually reachable from within a spawned specialist, or if they're restricted per Issue #13605
 - Document the working invocation pattern in the plugin README so users don't go through the same discovery process we did

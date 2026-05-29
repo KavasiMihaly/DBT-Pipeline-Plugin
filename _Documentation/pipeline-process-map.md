@@ -66,7 +66,7 @@ User drops CSVs ──▶ Orchestrator ──▶ 13 stages (0-12) ──▶ Vali
 
 ### Stage 5 — Project Scaffolding *(skipped in incremental mode)*
 - **Actor:** `dbt-architecture-setup` (foreground)
-- **Action:** Creates numbered folders (0-7), venv, `dbt_project.yml`, `profiles.yml`, initial dbt packages
+- **Action:** Creates numbered folders (0-6), venv, `dbt_project.yml`, `profiles.yml`, initial dbt packages
 - **Gate:** `git init` + initial commit — required for worktree parallelism later
 
 ### Stage 6 — Load Source Data
@@ -108,7 +108,7 @@ User drops CSVs ──▶ Orchestrator ──▶ 13 stages (0-12) ──▶ Vali
 ### Stage 12 — Handoff Summary
 - **Actor:** Orchestrator
 - **Action:** Marks pipeline-design.md Status = Validated, appends Section 12 log, prints success summary
-- **Next step suggestion:** Hand off to `tmdl-scaffold` for Power BI semantic layer
+- **Next step suggestion:** Optionally generate a Power BI Project (PBIP) via the `pbip-from-dbt` skill for the Power BI semantic layer
 
 ## Master Document: `pipeline-design.md`
 
@@ -152,7 +152,7 @@ A single file accumulates state across every stage. The orchestrator is the sole
 ## User Interaction Budget
 
 Exactly **two** user touch points in the happy path:
-1. **Stage 2** — 5 discovery questions via `AskUserQuestion`
+1. **Stage 2** — 4 discovery questions via `AskUserQuestion`
 2. **Stage 4** — plan approval via `ExitPlanMode`
 
 Failure escalation is the only other time the orchestrator talks to the user.

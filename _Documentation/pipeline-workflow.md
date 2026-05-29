@@ -1,6 +1,6 @@
 # dbt Pipeline Plugin — End-to-End Workflow
 
-**Last updated:** 2026-04-21
+**Last updated:** 2026-05-29
 **Applies to:** `dbt-pipeline-toolkit` plugin, orchestrator v2 (post I-057)
 
 This document describes the complete pipeline that runs when a user invokes the orchestrator from a repo containing source CSV files. It is the authoritative process map — the orchestrator's `agent.md` is the implementation; this is the narrative.
@@ -83,9 +83,9 @@ Orchestrator collects the JSON envelopes and writes Sections 2-3 of the master d
 
 Spawn `business-analyst` subagent.
 
-**If any profile has `header.status != "present"`**, BA must FIRST resolve the headers (WebSearch published data dictionary, confirm column names with user via `AskUserQuestion`, rewrite the profile JSON with verified names, flip `header.verified = true`) BEFORE asking the 5 discovery questions. Building on unverified synthetic column names is a hard-refused path.
+**If any profile has `header.status != "present"`**, BA must FIRST resolve the headers (WebSearch published data dictionary, confirm column names with user via `AskUserQuestion`, rewrite the profile JSON with verified names, flip `header.verified = true`) BEFORE asking the 4 discovery questions. Building on unverified synthetic column names is a hard-refused path.
 
-Once headers are verified (or were never missing), BA asks 5 discovery questions — business goals, consumers, KPIs, time grain, known business rules. BA writes Section 1 directly.
+Once headers are verified (or were never missing), BA asks the 4 discovery questions — business goals, consumers, KPIs, and time grain. BA writes Section 1 directly.
 
 ### Stage 3 — Draft Proposed Data Model
 
@@ -95,7 +95,7 @@ Then derive:
 - **Section 5 (Staging)** — one stg_ model per source table
 - **Section 6 (Dimensions)** — each dim that Section 8 requires (customer, product, date, etc.), with natural key, SCD type, attribute list
 - **Section 7 (Facts)** — each fact that Section 8 requires, with grain, FKs, measures, incremental strategy
-- **Section 8.1–8.5** — fill in shared dims, schema topology decision, conformed-keys table, **full Mermaid ER diagram with actual entity names** (no placeholder `dim_customer` / `dim_product` leftover from template), semantic notes for `tmdl-scaffold` handoff
+- **Section 8.1–8.5** — fill in shared dims, schema topology decision, conformed-keys table, **full Mermaid ER diagram with actual entity names** (no placeholder `dim_customer` / `dim_product` leftover from template), semantic notes for the `pbip-from-dbt` handoff
 - **Section 9 (Tests)** — 80% coverage target, list of custom tests derived from Section 1 business rules
 
 All rows in Sections 5-7 get `status: proposed` until builders complete them.

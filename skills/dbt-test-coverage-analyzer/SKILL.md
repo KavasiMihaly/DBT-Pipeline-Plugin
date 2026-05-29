@@ -209,10 +209,10 @@ GitHub Actions surfaces the non-zero exit as a step failure and shows the detail
 
 ### Markdown Report
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --format markdown > coverage-report.md
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --format markdown --target 0
 ```
 
-Generates a markdown file suitable for:
+Prints a markdown-formatted report to stdout (the `--target 0` keeps the command exit-0 so it does not fail when only inspecting). Capture the output with your tooling and save it to a file for:
 - Pull request comments
 - Documentation
 - Project wikis
@@ -296,14 +296,18 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_
 ```
 
 ### Example 3: CI/CD Integration
+
+Enforcement is a single atomic command — `--target` makes the script exit 1 when coverage is below the threshold, so no JSON parsing or shell pipelines are needed:
+
 ```bash
-# Run in CI pipeline
-python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --format json > coverage.json
+# Run in CI pipeline — exits non-zero (fails the build) if coverage < 80%
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --detailed --target 80
+```
 
-# Parse result
-jq -r '.recommendations[]' coverage.json
+To inspect coverage without failing the build, disable enforcement with a permissive target:
 
-# Fail build if below threshold
+```bash
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-test-coverage-analyzer/scripts/analyze_coverage.py" --detailed --target 0
 ```
 
 ## Best Practices
