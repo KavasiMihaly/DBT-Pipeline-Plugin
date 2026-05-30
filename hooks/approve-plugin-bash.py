@@ -47,9 +47,10 @@ Allowlist categories (built from a full audit of the plugin's `agent.md` and
   2. Specific `python -c` one-liners the plugin depends on (pyodbc driver check,
      CSV file-copy helper in dbt-architecture-setup)
   3. Virtualenv / pip operations used by dbt-project-initializer
-  4. `git` commands used by Stage 5 scaffold init and Stage 8/9 worktree
-     isolation (init, status, add, commit, log, show, diff, branch, rev-parse,
-     worktree, merge, stash)
+  4. `git` commands used by Stage 5 scaffold init and the per-stage progress
+     commits the orchestrator makes after every build stage (init, status, add,
+     commit, log, show, diff, branch, rev-parse, ls-files). worktree/merge are
+     kept for the opt-in worktree-isolation path (off by default).
   5. Filesystem discovery commands (`find . -name "*.csv"`, `ls *.csv`,
      `ls dbt_project.yml`, `ls` in `2 - Source Files/`)
   6. Project folder creation and CSV copy (`mkdir -p "2 - Source Files"`,
@@ -129,7 +130,8 @@ _ALLOWLIST: list[re.Pattern[str]] = [
     re.compile(r'''^\s*(\.venv[/\\](bin|Scripts)[/\\])?pip[0-9.]*\s+install\s+.*$''', re.DOTALL),
     re.compile(r'''^\s*(\.venv[/\\](bin|Scripts)[/\\])?pip[0-9.]*\s+(list|freeze|show|check)(\s+.*)?\s*$''', re.DOTALL),
 
-    # --- git commands (Stage 5 scaffold init, Stages 8/9 worktree isolation)
+    # --- git commands (Stage 5 scaffold init + per-stage progress commits;
+    #     worktree/merge kept for the opt-in isolation path, off by default)
     re.compile(
         r'''^\s*git\s+(init|status|add|commit|log|show|diff|branch|checkout|rev-parse|worktree|merge|stash|config|remote|fetch|pull|ls-files|tag)\b.*$''',
         re.DOTALL,

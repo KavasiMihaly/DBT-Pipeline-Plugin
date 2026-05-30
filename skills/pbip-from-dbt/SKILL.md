@@ -39,7 +39,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/pbip-from-dbt/scripts/build_pbip.py" --outp
 Defaults:
 - `--design-file "1 - Documentation/pipeline-design.md"`
 - `--config-file "project-config.yml"`
-- `--schema "dbo_analytics"`
+- `--schema` — auto-detected from `target/manifest.json` (e.g. `analytics`); falls back to project-config.yml then `analytics`
 - `--culture "en-GB"`
 - `--include "dim_*,fct_*"`
 - `--exclude "stg_*,raw_*"`
@@ -49,7 +49,7 @@ Output: `4 - Semantic Layer/Sales Analytics/` with `.pbip`, `.Report/`, `.Semant
 ### Override connection
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/pbip-from-dbt/scripts/build_pbip.py" --output "4 - Semantic Layer" --name "Sales Analytics" --server "myserver.database.windows.net" --database "SalesDW" --schema "dbo_analytics"
+python "${CLAUDE_PLUGIN_ROOT}/skills/pbip-from-dbt/scripts/build_pbip.py" --output "4 - Semantic Layer" --name "Sales Analytics" --server "myserver.database.windows.net" --database "SalesDW" --schema "analytics"
 ```
 
 ### Overwrite existing output
@@ -83,7 +83,7 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/pbip-from-dbt/scripts/build_pbip.py" --outp
 | `--project-root` | No | `.` | Root for resolving design/config files. |
 | `--server` | No | from config | SQL Server endpoint literal. |
 | `--database` | No | from config | Database name literal. |
-| `--schema` | No | `dbo_analytics` | Schema containing dim_*/fct_* tables. |
+| `--schema` | No | auto-detect | Schema containing dim_*/fct_* tables. Auto-detected from `target/manifest.json`; falls back to project-config.yml, then `analytics`. |
 | `--culture` | No | `en-GB` | Model culture. |
 | `--include` | No | `dim_*,fct_*` | Comma-separated include globs. |
 | `--exclude` | No | `stg_*,raw_*` | Comma-separated exclude globs. |
@@ -161,7 +161,7 @@ table dim_customer
 				  Data = Source
 				    {
 				      [
-				        Schema = "dbo_analytics",
+				        Schema = "analytics",
 				        Item   = "dim_customer"
 				      ]
 				    }

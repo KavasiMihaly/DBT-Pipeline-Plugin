@@ -137,9 +137,9 @@ Before initializing, gather the following information from the user:
 
 4. **Schema Configuration** (IMPORTANT - always ask):
    - **Source schema** (`--schema`): Where raw CSV data is loaded (default: "raw")
-   - **dbt schema** (`--dbt-schema`): Prefix for dbt model schemas (default: "dbo")
-     - Creates: `{dbt_schema}_staging`, `{dbt_schema}_intermediate`, `{dbt_schema}_analytics`
-     - Example with default "dbo": `dbo_staging`, `dbo_intermediate`, `dbo_analytics`
+   - **dbt schema** (`--dbt-schema`): Default profile target schema (default: "dbo")
+     - dbt-sqlserver (legacy `generate_schema_name`) uses each folder's `+schema` value **verbatim**, so staging/intermediate/marts land in `staging` / `intermediate` / `analytics` regardless of this value
+     - The target schema only applies to models that have no `+schema` of their own
 
 5. **Project Description**: Brief description for documentation
 
@@ -354,9 +354,9 @@ The project uses two schema parameters to organize database objects:
 **Resulting Database Schemas:**
 ```
 raw                    # Source data (sql-executor loads here)
-dbo_staging            # Staging views (stg_*)
-dbo_intermediate       # Intermediate models (int_*)
-dbo_analytics          # Marts - facts and dimensions (fct_*, dim_*)
+staging                # Staging views (stg_*)
+intermediate           # Intermediate models (int_*)
+analytics              # Marts - facts and dimensions (fct_*, dim_*)
 ```
 
 ### dbt Project (dbt_project.yml)

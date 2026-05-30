@@ -60,9 +60,11 @@ models:
         data_tests:
           - not_null
           - relationships:
-              to: ref('dim_customer')
-              field: customer_key
-              severity: error
+              arguments:
+                to: ref('dim_customer')
+                field: customer_key
+              config:
+                severity: error
 ```
 
 ### Minimum Test Coverage by Model Type
@@ -114,8 +116,9 @@ models:
         data_tests:
           - not_null
           - relationships:
-              to: ref('dim_entity')
-              field: entity_key
+              arguments:
+                to: ref('dim_entity')
+                field: entity_key
 
       - name: measure_column
         data_tests:
@@ -572,8 +575,9 @@ models:
       - name: foreign_key
         data_tests:
           - relationships:
-              to: ref('upstream_model')
-              field: key_column
+              arguments:
+                to: ref('upstream_model')
+                field: key_column
 ```
 
 **Focus**: Transformation correctness, key integrity
@@ -595,8 +599,9 @@ models:
         data_tests:
           - not_null
           - relationships:
-              to: ref('dim_entity')
-              field: entity_key
+              arguments:
+                to: ref('dim_entity')
+                field: entity_key
 
       - name: measure
         data_tests:
@@ -634,7 +639,8 @@ models:
       - name: categorical_field
         data_tests:
           - accepted_values:
-              values: ['value1', 'value2', 'value3']
+              arguments:
+                values: ['value1', 'value2', 'value3']
 ```
 
 **Focus**: Key integrity, categorical validation, contracts

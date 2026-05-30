@@ -290,7 +290,8 @@ models:
         data_tests:
           - not_null
           - accepted_values:
-              values: ['Active', 'Inactive', 'Pending']
+              arguments:
+                values: ['Active', 'Inactive', 'Pending']
 ```
 
 Export saved to: 1 - Documentation/data-profiles/profile_customers_20260111_143022.json

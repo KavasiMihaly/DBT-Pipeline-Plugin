@@ -28,6 +28,16 @@ import subprocess
 import os
 from pathlib import Path
 
+# Windows consoles default to a non-UTF-8 code page (cp1252), so printing a
+# status glyph like the check mark raises UnicodeEncodeError. That exception
+# used to be caught below and turned a SUCCESSFUL dbt run into exit code 1.
+# Force UTF-8 with replacement so wrapper output can never flip the exit code.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 
 def find_dbt_project_root():
     """
@@ -84,6 +94,35 @@ def find_venv_dbt(project_root):
     return None
 
 
+def _extract_opt(args, name):
+    """Pull `--name value` or `--name=value` out of an args list.
+
+    Returns (value_or_None, remaining_args). This lets run_dbt.py accept
+    `--project-dir` / `--profiles-dir` so it is CWD-independent — the wrapper can
+    be invoked from anywhere (e.g. the repo root) without `cd`-ing into the dbt
+    project first, which the harness CWD does not always point at.
+    """
+    remaining = []
+    value = None
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == name:
+            if i + 1 < len(args):
+                value = args[i + 1]
+                i += 2
+            else:
+                i += 1
+            continue
+        if a.startswith(name + "="):
+            value = a.split("=", 1)[1]
+            i += 1
+            continue
+        remaining.append(a)
+        i += 1
+    return value, remaining
+
+
 def run_dbt_command(args):
     """
     Execute dbt command with provided arguments.
@@ -94,13 +133,30 @@ def run_dbt_command(args):
     Returns:
         int: Exit code (0 for success, 1 for failure)
     """
-    # Find dbt project root
-    project_root = find_dbt_project_root()
+    # CWD-independence: honor an explicit --project-dir / --profiles-dir so the
+    # wrapper can run from anywhere (the harness CWD is not always the dbt
+    # project). --project-dir sets the subprocess cwd; --profiles-dir is
+    # forwarded to dbt as an absolute path. Both are stripped from the args
+    # passed through to dbt so they cannot be double-applied.
+    project_dir_opt, args = _extract_opt(args, "--project-dir")
+    profiles_dir_opt, args = _extract_opt(args, "--profiles-dir")
 
-    if project_root is None:
-        print("ERROR: No dbt project found (dbt_project.yml not found)")
-        print("Please run this script from within a dbt project directory")
+    if not args:
+        print("ERROR: no dbt subcommand provided (e.g. run, test, build, compile)")
         return 1
+
+    # Find dbt project root
+    if project_dir_opt:
+        project_root = Path(project_dir_opt).resolve()
+        if not (project_root / "dbt_project.yml").exists():
+            print(f"ERROR: --project-dir has no dbt_project.yml: {project_root}")
+            return 1
+    else:
+        project_root = find_dbt_project_root()
+        if project_root is None:
+            print("ERROR: No dbt project found (dbt_project.yml not found)")
+            print("Please run from within a dbt project directory, or pass --project-dir <path>")
+            return 1
 
     print(f"dbt project root: {project_root}")
 
@@ -112,8 +168,11 @@ def run_dbt_command(args):
     else:
         dbt_executable = "dbt"
 
-    # Build dbt command
+    # Build dbt command. Forward --profiles-dir to dbt as an absolute path if the
+    # caller supplied one (run_dbt consumed it above so it wasn't passed twice).
     dbt_cmd = [dbt_executable] + args
+    if profiles_dir_opt:
+        dbt_cmd += ["--profiles-dir", str(Path(profiles_dir_opt).resolve())]
 
     print(f"Executing: {' '.join(dbt_cmd)}")
     print("-" * 80)
@@ -127,14 +186,18 @@ def run_dbt_command(args):
             text=True
         )
 
-        print("-" * 80)
-
-        if result.returncode == 0:
-            print(f"✓ dbt {args[0]} completed successfully")
-            return 0
-        else:
-            print(f"✗ dbt {args[0]} failed with exit code {result.returncode}")
-            return 1
+        # Capture dbt's real return code BEFORE printing anything. The wrapper's
+        # own status line must never be able to change the exit code we propagate.
+        rc = result.returncode
+        try:
+            print("-" * 80)
+            if rc == 0:
+                print(f"[OK] dbt {args[0]} completed successfully")
+            else:
+                print(f"[FAILED] dbt {args[0]} failed with exit code {rc}")
+        except Exception:
+            pass  # never let a console-encoding error mask dbt's real result
+        return rc
 
     except FileNotFoundError:
         print("ERROR: dbt command not found")
@@ -177,6 +240,10 @@ def main():
         print("  python run_dbt.py run --select state:modified+")
         print("  python run_dbt.py run --vars '{\"start_date\": \"2024-01-01\"}'")
         print("  python run_dbt.py run --threads 8 --target prod")
+        print("")
+        print("CWD-independent (run from anywhere):")
+        print("  python run_dbt.py run --project-dir \"3 - Data Pipeline\"")
+        print("  python run_dbt.py test --project-dir /abs/path/to/project --profiles-dir /abs/path")
         return 1
 
     # Get dbt command and arguments (everything after script name)

@@ -103,6 +103,18 @@ Prompted on install, editable later via `/plugin`. Sensitive values are stored i
 | `entra_interactive` | Browser sign-in on first connect                   |
 | `entra_sp`          | `azure_tenant_id`, `azure_client_id`, `azure_client_secret` |
 
+### Worktree isolation — **off for now**
+
+When building dimensions and facts in parallel, the orchestrator *can* run each background builder in its own isolated git worktree. **This is turned off by default** in the current release: the parallel builders write directly to the main working tree instead.
+
+Why it's off: on Windows — especially under OneDrive-synced paths — the per-agent worktrees hit `Filename too long` (MAX_PATH) errors, OneDrive/antivirus file-locks on worktree removal, and a missing merge-back step that could leave built models out of the main tree. Disabling isolation removes that whole failure class. Parallel builds are still safe because each builder writes to its own uniquely-named model files (no two builders touch the same file).
+
+Re-enabling is **not a user-facing toggle** in this release — the orchestrator simply doesn't request worktree isolation, so there's nothing to flip in `settings.local.json`. A future release may expose it as a supported option for short, non-OneDrive, git-initialised paths (`C:\repos\…`, Linux/macOS). For now the pipeline always builds in the main working tree.
+
+### Progress commits
+
+The orchestrator initialises a git repo for the project and **commits a checkpoint after every build stage** (scaffold → load → staging → dimensions → facts → tests → validation → handoff). The history reads as a clean stage-by-stage narrative, so you can show progress live, diff a single stage, or roll back to any checkpoint. Commits are **local only — nothing is pushed**. A failed commit never halts the build, and in incremental mode on a project that isn't a git repo, checkpoints are skipped.
+
 ---
 
 ## Usage

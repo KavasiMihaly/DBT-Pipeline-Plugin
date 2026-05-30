@@ -9,14 +9,14 @@ Performs a total reset:
 
 Usage:
     python reset_project.py --database MyDatabase
-    python reset_project.py --database MyDatabase --schemas raw,dbo_staging,dbo_analytics
+    python reset_project.py --database MyDatabase --schemas raw,staging,analytics
     python reset_project.py --database MyDatabase --dry-run
     python reset_project.py --database MyDatabase --keep-raw
 
 Schema detection order (first match wins):
     1. --schemas CLI override
-    2. dbt_project.yml (+schema suffixes) combined with profiles.yml (target schema)
-    3. Defaults: raw=raw, staging=dbo_staging, marts=dbo_analytics
+    2. dbt_project.yml (+schema values, used verbatim by dbt-sqlserver)
+    3. Defaults: raw=raw, staging=staging, marts=analytics
 """
 
 import argparse
@@ -78,9 +78,9 @@ def detect_schemas_from_dbt_project(project_root: Path) -> dict:
     "couldn't detect, fall back to default". Uses regex parsing to avoid a
     PyYAML dependency — matches the approach used in pbip-from-dbt/build_pbip.py.
 
-    dbt-sqlserver resolves final schemas as `{profile_target_schema}_{+schema_suffix}`.
+    dbt-sqlserver's default (legacy) generate_schema_name uses each folder's
+    `+schema:` value VERBATIM as the final schema (no profile-target prefix).
     So we read:
-      - profiles.yml → schema under the default target
       - dbt_project.yml → `+schema:` under models.<project>.staging and models.<project>.marts
     """
     result = {}
@@ -117,10 +117,15 @@ def detect_schemas_from_dbt_project(project_root: Path) -> dict:
         if m_marts:
             marts_suffix = m_marts.group(1)
 
-    if profile_target_schema and staging_suffix:
-        result["staging"] = f"{profile_target_schema}_{staging_suffix}"
-    if profile_target_schema and marts_suffix:
-        result["marts"] = f"{profile_target_schema}_{marts_suffix}"
+    # dbt-sqlserver's default (legacy) generate_schema_name uses the +schema
+    # value VERBATIM — it does NOT prefix it with the profile target schema — so
+    # the final schema IS the suffix (e.g. `staging`, `analytics`), not
+    # `dbo_staging`/`dbo_analytics` (I-084). profile_target_schema is read above
+    # only for models that have no +schema of their own.
+    if staging_suffix:
+        result["staging"] = staging_suffix
+    if marts_suffix:
+        result["marts"] = marts_suffix
 
     # Raw schema is conventional — always `raw` unless overridden
     result["raw"] = "raw"
@@ -240,9 +245,10 @@ def generate_drop_sql(
 ) -> str:
     """Generate DROP statements for only the objects created by this pipeline.
 
-    Schemas differ by object type on dbt-sqlserver:
-      - staging views → `{target}_staging` (e.g. `dbo_staging`)
-      - dim/fact tables → `{target}_analytics` (e.g. `dbo_analytics`)
+    Schemas differ by object type on dbt-sqlserver (the `+schema` value is used
+    verbatim):
+      - staging views → the staging `+schema` (e.g. `staging`)
+      - dim/fact tables → the marts `+schema` (e.g. `analytics`)
       - raw source tables → `raw`
     """
     lines = [f"USE [{database}];", ""]
@@ -418,13 +424,13 @@ def resolve_schemas(project_root: Path, cli_schemas: str | None) -> tuple[str, s
     Priority:
       1. --schemas CLI override (1, 2, or 3 comma-separated values)
       2. Auto-detected from dbt_project.yml + profiles.yml
-      3. Defaults: raw=raw, staging=dbo_staging, marts=dbo_analytics
+      3. Defaults: raw=raw, staging=staging, marts=analytics
 
     For backward compat, 2-value CLI input (`raw,dbo`) is accepted with a
-    warning — it's rewritten as (`raw`, `dbo_staging`, `dbo_analytics`) since
+    warning — it's rewritten as (`raw`, `staging`, `analytics`) since
     a single dbt schema doesn't match the actual dbt-sqlserver layout.
     """
-    defaults = {"raw": "raw", "staging": "dbo_staging", "marts": "dbo_analytics"}
+    defaults = {"raw": "raw", "staging": "staging", "marts": "analytics"}
 
     # Auto-detect first — we use it for any values the CLI doesn't override
     detected = detect_schemas_from_dbt_project(project_root)
@@ -462,7 +468,7 @@ def main():
         default=None,
         help=(
             "Comma-separated schemas: raw,staging,marts (default: auto-detected "
-            "from dbt_project.yml + profiles.yml, falling back to raw,dbo_staging,dbo_analytics). "
+            "from dbt_project.yml, falling back to raw,staging,analytics). "
             "Legacy 2-value form `raw,dbo` is accepted with a warning."
         ),
     )

@@ -50,22 +50,22 @@ If there is any mismatch — prompt vs. Section 6, or prompt vs. available sourc
 
 This is a hard rule. Silent deviations break the user's mental model of what their Power BI semantic layer contains, and the cost is only caught when they open the PBIP — hours or days later. Fail fast here, with full context.
 
-## CRITICAL: Mart Schema is NOT `dbo`
+## CRITICAL: Mart Schema is `analytics`, not `dbo`
 
-The `dbt_project.yml` sets `+schema: analytics` for the `marts/` folder. With the default profile target schema `dbo`, dbt-sqlserver creates mart models in **`dbo_analytics`**, not `dbo`.
+The `dbt_project.yml` sets `+schema: analytics` for the `marts/` folder. dbt-sqlserver's default (legacy) `generate_schema_name` uses that `+schema` value **verbatim** — it does NOT prefix it with the profile target schema — so mart models land in schema **`analytics`** (not `dbo`, and not `dbo_analytics`).
 
 **When validating models after building, always query the correct schema:**
 ```sql
 -- WRONG: will find nothing
 SELECT TOP 10 * FROM dbo.dim_customer
 
--- CORRECT: marts land in dbo_analytics
-SELECT TOP 10 * FROM dbo_analytics.dim_customer
+-- CORRECT: marts land in `analytics`
+SELECT TOP 10 * FROM analytics.dim_customer
 ```
 
-Read `dbt_project.yml` and `profiles.yml` to confirm the actual schema names before running validation queries. The pattern is `{profile_target_schema}_{dbt_project_schema_suffix}`:
-- Staging: `{target}_staging` (e.g., `dbo_staging`)
-- Marts: `{target}_analytics` (e.g., `dbo_analytics`)
+Confirm the actual schema names against `target/manifest.json` (each model node's `schema`) before running validation queries. With the plugin's default scaffold the `+schema` values are used directly:
+- Staging: `staging`
+- Marts: `analytics`
 
 ## Data Profiles Location
 

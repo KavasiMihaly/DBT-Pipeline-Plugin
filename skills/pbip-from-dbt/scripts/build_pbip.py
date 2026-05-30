@@ -61,8 +61,11 @@ def parse_args() -> argparse.Namespace:
                    help="SQL Server endpoint. Overrides project-config.yml database.server.")
     p.add_argument("--database", default=None,
                    help="Database name. Overrides project-config.yml database.name.")
-    p.add_argument("--schema", default="dbo_analytics",
-                   help="Schema containing dim_*/fct_* tables.")
+    p.add_argument("--schema", default=None,
+                   help="Schema containing dim_*/fct_* tables. If omitted, auto-detected "
+                        "from target/manifest.json (the schema dbt actually built into — "
+                        "handles dbt-sqlserver legacy 'analytics' vs 'dbo_analytics'); "
+                        "falls back to project-config.yml, then 'analytics'.")
     p.add_argument("--culture", default="en-GB",
                    help="Default culture for the semantic model.")
     p.add_argument("--include", default="dim_*,fct_*",
@@ -174,9 +177,9 @@ def parse_config_file(path: Path) -> dict:
         ),
         "schema": _first(
             # Note: dbt_schema is the profile default schema (e.g. "dbo"),
-            # not the mart schema. We don't map it — --schema defaults to
-            # "dbo_analytics" at CLI level, which matches the initializer's
-            # dbt_project.yml marts config.
+            # not the mart schema. The mart schema is auto-detected from
+            # target/manifest.json (see detect_schema_from_manifest); this
+            # config value is only a fallback below it.
             legacy_db.get("schema"),
         ),
     }
@@ -265,6 +268,45 @@ def read_plugin_settings_local(project_root: Path) -> dict:
         }
     except (OSError, ValueError):
         return {}
+
+
+def detect_schema_from_manifest(project_root: Path, tables: list[str]):
+    """Return the schema the dim_/fct_ models ACTUALLY materialized into, read
+    from dbt's `target/manifest.json`. This is authoritative — it reflects
+    dbt-sqlserver's real `generate_schema_name` behaviour (legacy naming yields
+    `analytics`, the `dbo_`-concat flag yields `dbo_analytics`) instead of
+    hard-coding a guess. Returns the most common schema across matched model
+    nodes, or None if no manifest exists or nothing matches.
+    """
+    candidates = [
+        project_root / "target" / "manifest.json",
+        project_root / "3 - Data Pipeline" / "target" / "manifest.json",
+    ]
+    manifest_path = next((p for p in candidates if p.exists()), None)
+    if manifest_path is None:
+        return None
+    try:
+        import json as _json
+        data = _json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    nodes = data.get("nodes")
+    if not isinstance(nodes, dict):
+        return None
+    wanted = {t.lower() for t in tables}
+    from collections import Counter
+    counts: "Counter" = Counter()
+    for node in nodes.values():
+        if not isinstance(node, dict) or node.get("resource_type") != "model":
+            continue
+        name = (node.get("name") or "").lower()
+        alias = (node.get("alias") or "").lower()
+        schema = node.get("schema")
+        if schema and (name in wanted or alias in wanted):
+            counts[schema] += 1
+    if not counts:
+        return None
+    return counts.most_common(1)[0][0]
 
 
 def filter_tables(names: list[str], include: str, exclude: str) -> list[str]:
@@ -439,7 +481,14 @@ def build_pbip(args: argparse.Namespace) -> int:
     settings_fallback = read_plugin_settings_local(root)
     server = args.server or cfg.get("server") or settings_fallback.get("server")
     database = args.database or cfg.get("database") or settings_fallback.get("database")
-    schema = args.schema or cfg.get("schema") or "dbo_analytics"
+    # Schema priority: explicit --schema > schema dbt actually built into (read
+    # from target/manifest.json) > project-config.yml > 'dbo_analytics'. The
+    # manifest tier fixes the dbt-sqlserver legacy-naming mismatch where marts
+    # land in `analytics`/`staging` (not `dbo_analytics`) — I-084.
+    detected_schema = detect_schema_from_manifest(root, tables)
+    schema = args.schema or detected_schema or cfg.get("schema") or "analytics"
+    if detected_schema and not args.schema:
+        log(f"Auto-detected marts schema from manifest: {detected_schema}", verbose)
     if not server:
         err(
             "SQL server not specified. Tried: --server flag, project-config.yml "

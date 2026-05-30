@@ -44,17 +44,20 @@ models:
         data_tests:
           - not_null
           - relationships:
-              to: ref('dim_customer')
-              field: customer_key
-              severity: error
+              arguments:
+                to: ref('dim_customer')
+                field: customer_key
+              config:
+                severity: error
 
       - name: product_key
         description: Foreign key to dim_product
         data_tests:
           - not_null
           - relationships:
-              to: ref('dim_product')
-              field: product_key
+              arguments:
+                to: ref('dim_product')
+                field: product_key
 ```
 
 **What it tests**:
@@ -74,13 +77,16 @@ models:
         description: Current status of the order
         data_tests:
           - accepted_values:
-              values: ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'refunded']
-              severity: error
+              arguments:
+                values: ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'refunded']
+              config:
+                severity: error
 
       - name: payment_method
         data_tests:
           - accepted_values:
-              values: ['credit_card', 'debit_card', 'paypal', 'wire_transfer', 'cash']
+              arguments:
+                values: ['credit_card', 'debit_card', 'paypal', 'wire_transfer', 'cash']
 ```
 
 **What it tests**:
@@ -143,8 +149,9 @@ models:
         data_tests:
           - not_null
           - relationships:
-              to: ref('dim_entity')
-              field: entity_key
+              arguments:
+                to: ref('dim_entity')
+                field: entity_key
 
       - name: measure
         data_tests:
@@ -695,9 +702,11 @@ models:
       - name: customer_key
         data_tests:
           - relationships:
-              to: ref('dim_customer')
-              field: customer_key
-              severity: error
+              arguments:
+                to: ref('dim_customer')
+                field: customer_key
+              config:
+                severity: error
 
       - name: discount_amount
         data_tests:
@@ -715,9 +724,11 @@ models:
   - name: fct_sales
     data_tests:
       - relationships:
-          to: ref('dim_customer')
-          field: customer_key
-          tags: ['referential_integrity']
+          arguments:
+            to: ref('dim_customer')
+            field: customer_key
+          config:
+            tags: ['referential_integrity']
 
       - dbt_utils.expression_is_true:
           expression: "sales_amount > 0"

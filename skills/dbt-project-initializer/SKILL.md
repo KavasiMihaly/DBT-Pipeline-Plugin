@@ -67,18 +67,19 @@ The project uses two schema parameters:
 1. **`--schema`** (default: `raw`): Where sql-executor loads source CSV data
    - Source tables created in `raw` schema (e.g., `raw.carbon_intensity`)
 
-2. **`--dbt-schema`** (default: `dbo`): dbt's default schema prefix
-   - dbt concatenates this with model schemas to create final schema names:
-   - Staging models → `dbo_staging`
-   - Intermediate models → `dbo_intermediate`
-   - Marts (facts/dims) → `dbo_analytics`
+2. **`--dbt-schema`** (default: `dbo`): dbt's default profile target schema
+   - dbt-sqlserver (legacy `generate_schema_name`) uses each folder's `+schema` value **verbatim** — it does NOT prefix it — so final schemas are:
+   - Staging models → `staging`
+   - Intermediate models → `intermediate`
+   - Marts (facts/dims) → `analytics`
+   - (the `--dbt-schema` value only applies to models that have no `+schema` of their own)
 
 **Final Schema Structure:**
 ```
 raw                    # Source data (sql-executor)
-dbo_staging            # Staging views (stg_*)
-dbo_intermediate       # Intermediate models (int_*)
-dbo_analytics          # Marts - facts and dimensions (fct_*, dim_*)
+staging                # Staging views (stg_*)
+intermediate           # Intermediate models (int_*)
+analytics              # Marts - facts and dimensions (fct_*, dim_*)
 ```
 
 ## What Gets Created

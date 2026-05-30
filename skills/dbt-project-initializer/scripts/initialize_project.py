@@ -370,10 +370,12 @@ dbt:
     driver: "ODBC Driver 17 for SQL Server"
 
   # Schema naming convention
-  # dbt default schema (in profiles.yml) prefixes model schemas:
-  #   - staging models → {config["dbt_schema"]}_staging
-  #   - intermediate models → {config["dbt_schema"]}_intermediate
-  #   - marts models → {config["dbt_schema"]}_analytics
+  # dbt-sqlserver (legacy generate_schema_name) uses each folder's +schema
+  # value VERBATIM (no prefix), so model schemas are:
+  #   - staging models → staging
+  #   - intermediate models → intermediate
+  #   - marts models → analytics
+  # The dbt default schema ({config["dbt_schema"]}) only applies to models with no +schema.
 
   # Profile locations (in order of precedence)
   profile_locations:
@@ -1084,7 +1086,7 @@ def main():
         "--dbt-schema",
         type=str,
         default="dbo",
-        help="dbt default schema prefix - creates dbo_staging, dbo_intermediate, dbo_analytics (default: dbo)"
+        help="dbt default profile target schema. dbt-sqlserver uses each folder's +schema verbatim, so models land in staging/intermediate/analytics regardless (default: dbo)"
     )
     parser.add_argument(
         "--description",
@@ -1148,7 +1150,7 @@ def main():
     print(f"  Project Name: {display_name} ({project_name})")
     print(f"  Database: {config['database']}")
     print(f"  Source Schema: {config['schema']} (for raw data/seeds)")
-    print(f"  dbt Schema: {config['dbt_schema']} (creates {config['dbt_schema']}_staging, {config['dbt_schema']}_intermediate, {config['dbt_schema']}_analytics)")
+    print(f"  dbt Schema: {config['dbt_schema']} (models use +schema verbatim: staging, intermediate, analytics)")
     print(f"  Description: {config['description']}")
     print()
 

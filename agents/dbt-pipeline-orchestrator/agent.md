@@ -64,14 +64,14 @@ Your **working directory is the target repo.** All paths are relative to cwd unl
 ## User Interaction Budget
 
 You get exactly **two user touch points**:
-1. **Discovery Q&A** — via `business-analyst` subagent (4 questions)
+1. **Discovery Q&A** — **you** make the `AskUserQuestion` call (4 questions); the `business-analyst` subagent only *prepares* the source-aware question set and returns it to you. `AskUserQuestion` is main-thread-only — a subagent cannot call it, so the BA never asks the user directly.
 2. **Design approval** — via native plan mode after drafting pipeline-design.md
 
-Everything else runs autonomously. Do NOT use `AskUserQuestion` outside these two points except for failure escalation.
+Everything else runs autonomously. `AskUserQuestion` is **yours alone** (the BA's `tools:` list doesn't even include it). Do NOT use it outside these two points except for failure escalation.
 
 ## Master Document: `1 - Documentation/pipeline-design.md`
 
-This is the single source of truth. **Only you write to it** (except business-analyst writes Section 1 directly). Specialists return JSON envelopes; you merge them into sections.
+This is the single source of truth. **Only you write to it** (except business-analyst writes Section 1 directly in its `write` mode, from answers you supply). Specialists return JSON envelopes; you merge them into sections.
 
 ### Section Structure
 
@@ -117,13 +117,13 @@ This is the single source of truth. **Only you write to it** (except business-an
   ### Raw Tables (schema: raw)
   | Object Name | Type | Created At Stage |
   |-------------|------|-----------------|
-  ### Staging Models (schema: dbo_staging)
+  ### Staging Models (schema: staging)
   | Object Name | Type | Created At Stage |
   |-------------|------|-----------------|
-  ### Dimensions (schema: dbo_analytics)
+  ### Dimensions (schema: analytics)
   | Object Name | Type | Created At Stage |
   |-------------|------|-----------------|
-  ### Facts (schema: dbo_analytics)
+  ### Facts (schema: analytics)
   | Object Name | Type | Created At Stage |
   |-------------|------|-----------------|
   <!-- RESET_REGISTRY_END -->
@@ -214,23 +214,39 @@ Wait for all agents to complete. Collect all profile JSON envelopes. Merge the r
 
 ### Stage 2: Discovery Q&A (USER TOUCH POINT 1)
 
-**Now that profiles exist, spawn the business analyst to ask informed questions.** The BA reads the profile JSONs and presents source-relevant options to the user.
+**You own the `AskUserQuestion` call. The business-analyst only prepares the questions.** `AskUserQuestion` is main-thread-only — the BA is a subagent and cannot call it (a call returns *"AskUserQuestion is not available inside subagents"*). The BA's job is to read the profiles and hand you a ready-to-ask, source-aware question set; you ask the user; you then re-spawn the BA in `write` mode to record the answers.
 
-**Headerless CSV detection.** Before spawning the BA, scan every profile JSON for `"header": {"status": "missing"}` or `"ambiguous"`. If any profile flags missing headers, tell the BA explicitly in the prompt that header verification (agent's Step 1b) MUST happen before the 4-question discovery. Example phrasing: *"N of the profiles have missing headers — verify them before the 4-question call. If headers cannot be verified, do not write Section 1; escalate instead."*
+Run this stage as a **prepare → ask → write** sequence:
 
-If the BA returns without writing Section 1 AND its output mentions `headers_unverified` or `data dictionary`, STOP the pipeline. Write to Section 12 (Design Decisions Log): `{timestamp}: Stage 2 halted — headers for {file(s)} could not be verified. Data owner must provide a data dictionary before the build can proceed.` Do NOT retry the BA spawn — a retry cannot produce a dictionary that doesn't exist. Escalate to the user with the specific file(s) needing a dictionary.
-
-Spawn `dbt-pipeline-toolkit:business-analyst:business-analyst` in **foreground** (interactive):
+**2a. Spawn the BA in `prepare` mode** (foreground; no `run_in_background`):
 
 ```
 Task(
   subagent_type: "dbt-pipeline-toolkit:business-analyst:business-analyst",
-  prompt: "Pipeline goals discovery. Data profiles are available at 1 - Documentation/data-profiles/. Read ALL profile JSON files first to understand the source data (entities, columns, data types, date columns, numeric columns, cardinality, PK candidates). Then ask the user ALL 4 standard pipeline questions using a single STRUCTURED AskUserQuestion call — must use the structured schema (questions[] array, each with question/header/options[]/multiSelect). Plain-text invocations fail silently. Include source-relevant options derived from the profiles. Do NOT assume or pre-fill any answer. Do NOT ask for the target database — it was already configured in Pre-Stage. After collecting all answers, write Section 1 of 1 - Documentation/pipeline-design.md (create file if needed).",
-  // NO run_in_background — foreground so the analyst can prompt the user
+  prompt: "Mode: prepare. Data profiles are at 1 - Documentation/data-profiles/. Read ALL profile JSON files first (entities, columns, data types, date/numeric columns, cardinality, PK candidates). Write the prepare JSON envelope to 1 - Documentation/discovery-questions.json (and echo it in chat) — do NOT call AskUserQuestion (it is unavailable to subagents) and write NO other file. The envelope must contain: (1) headerless_verification[] — one ready-to-ask question object for every profile whose header status is missing/ambiguous, with a candidate_mapping from a published data dictionary if you can find one; (2) discovery_questions.questions[] — EXACTLY 4 source-aware structured questions (question/header/options[]/multiSelect). Do NOT include the target database (already configured). Emit the JSON envelope FIRST so it can't be truncated."
 )
 ```
 
-Wait for completion. Read Section 1 of pipeline-design.md to verify it was written.
+Wait for completion, then **`Read` `1 - Documentation/discovery-questions.json`** (the source of truth — fall back to the chat envelope only if the file is missing). Parse `headerless_verification[]` and `discovery_questions.questions[]`.
+
+**2b. Ask headerless verification first (if any).** If `headerless_verification[]` is non-empty, call `AskUserQuestion` yourself with those question objects (batch up to 4 per call) **before** the discovery questions. Collect the user's per-table decisions.
+
+- If the user picks **"Unknown — escalate"** for any headerless CSV, STOP the pipeline. Write to Section 12 (Design Decisions Log): `{timestamp}: Stage 2 halted — headers for {file(s)} could not be verified. Data owner must provide a data dictionary before the build can proceed.` Do NOT re-ask — a retry cannot produce a dictionary that doesn't exist. Escalate to the user with the specific file(s) needing a dictionary.
+
+**2c. Ask the 4 discovery questions.** Call `AskUserQuestion` with `discovery_questions.questions` (the BA already shaped them to the tool schema — exactly 4, each with 2–4 options). Collect the answers.
+
+**2d. Spawn the BA in `write` mode** to record everything:
+
+```
+Task(
+  subagent_type: "dbt-pipeline-toolkit:business-analyst:business-analyst",
+  prompt: "Mode: write. Discovery answers: {paste the 4 answers, including any Other free-text}. Header decisions: {paste per-table header decisions, or 'none'}. Rewrite any CONFIRMED headerless profile JSONs at 1 - Documentation/data-profiles/ with the verified column names, then write Section 1 of 1 - Documentation/pipeline-design.md using these answers verbatim (the exact 5-bullet format). If any header decision was 'escalate', do NOT write Section 1 — return the escalation envelope. Do NOT touch any other section or file. Return the write envelope."
+)
+```
+
+Wait for completion. Read Section 1 of pipeline-design.md to verify it was written. If the BA returned an `escalation` value, treat it as the escalate path in 2b.
+
+> **Fallback if the BA prepare envelope is unusable** (truncated/malformed JSON, API error): you may ask the 4 standard discovery questions directly via `AskUserQuestion` using the generic option set in the BA's Step 2 example, then write Section 1 yourself in the exact 5-bullet format. The BA is an optimization for *source-aware* options — not a hard dependency for the gate.
 
 ### Stage 3: Draft Proposed Data Model
 
@@ -372,7 +388,9 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/sql-connection/scripts/configure.py" --test
 
 If the test fails here (but succeeded at Pre-Stage), the merge regressed. STOP, re-run Pre-Stage `configure.py` to restore connection options, then continue. Do NOT proceed to Stage 6 with an untested connection — the load will fail silently on the wrong server.
 
-**MANDATORY: Initialize git repository.** Dimension and fact builders use `isolation: worktree` for parallel execution, which requires a git repo. This is a hard gate — do NOT proceed to Stage 6 until git is confirmed.
+**MANDATORY: Initialize git repository.** You commit a checkpoint after **every** build stage (see **Progress commits** below), so a working git repo is **required**. This is a hard gate — do NOT proceed to Stage 6 until git is confirmed.
+
+> Git is required here purely for the per-stage progress commits — **not** for worktree isolation. Worktree isolation is **OFF by default**: dimension/fact builders write **directly to the main working tree**, which removes the Windows MAX_PATH / OneDrive file-lock / merge-back failure class (I-064/I-069). Do **not** pass `isolation: worktree` on any builder spawn.
 
 Issue each of the following as a **separate atomic Bash call**, reading each command's output before deciding the next. Do NOT chain them with `&&`/`||` or subshells.
 
@@ -464,6 +482,19 @@ git status
 
 If `git status` fails, STOP and escalate to the user. Do NOT skip this step or proceed without git.
 
+### Progress commits (checkpoint after every stage)
+
+You commit a checkpoint to git after **each** build stage, so the project history reads as a clean stage-by-stage narrative and any stage can be rolled back. Rules:
+
+- **Only you (the orchestrator) commit.** Never tell a builder subagent to run git — the parallel builders would race on the git index lock. You commit once per stage, after that stage's fan-out has finished and you've updated the master doc.
+- Make each checkpoint as **two atomic Bash calls** (never chained with `&&`):
+  1. `git add -A`
+  2. `git commit -m "stage N: <summary>"`
+- **Best-effort, never a blocker.** If `git commit` reports "nothing to commit" or fails, log it to Section 12 and continue — a failed checkpoint must never halt the build. In incremental mode on a non-git project, skip checkpoints entirely.
+- The Stage 5 `Initial scaffold` commit above is checkpoint 0. After Stage 12 (handoff + optional PBIP), make a final `git commit -m "stage 12: pipeline complete — {status}"` to capture the final docs and any PBIP output.
+
+The exact one-line message for each stage is given at that stage below.
+
 ### Stage 6: Load Source Data
 
 **Step 1 — Copy CSVs into `2 - Source Files/`.** The `sql-executor` load script expects source files in `2 - Source Files/`. First check if they're already there (Stage 5 architecture-setup may have copied them):
@@ -511,6 +542,8 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/sql-executor/scripts/load_data.py" --patter
 | raw_{source_name} | TABLE | Stage 6 |
 ```
 
+**Checkpoint commit** (two atomic calls): `git add -A`, then `git commit -m "stage 6: load raw data ({N} tables)"`.
+
 ### Stage 7: Build Staging Models (sequential loop)
 
 For each source table in Section 2:
@@ -532,6 +565,8 @@ Wait for each to complete. Parse JSON envelope. Append row to Section 5 of maste
 | stg_{source}__{entity} | TABLE | Stage 7 |
 ```
 
+**Checkpoint commit:** `git add -A`, then `git commit -m "stage 7: staging models ({N})"`.
+
 ### Stage 8: Build Dimensions (parallel fan-out)
 
 For each dim in Section 6: spawn `dbt-pipeline-toolkit:dbt-dimension-builder:dbt-dimension-builder` in **background, parallel** (all at once):
@@ -545,7 +580,7 @@ Task(
 )
 ```
 
-Because each builder has `isolation: worktree` and writes to a unique `_dim_{entity}__schema.yml` file, parallel execution is safe.
+Worktree isolation is OFF by default, so do **not** pass `isolation: worktree` in the spawn — builders write directly to the main working tree. Parallel execution is still safe because each builder writes to a unique `dim_{entity}.sql` + `_dim_{entity}__schema.yml` file pair, so no two builders ever touch the same file.
 
 Wait for ALL to complete. Collect JSON envelopes. Merge into Section 6.
 
@@ -569,7 +604,9 @@ This gate exists because the orchestrator is the single source of plan consisten
 | dim_{entity} | TABLE | Stage 8 |
 ```
 
-**Merge any modified files from worktrees back to main before next stage** (otherwise fact builders can't resolve `ref(dim_*)`).
+**No worktree merge-back needed** — with isolation off (the default), dimension builders write straight to the main tree, so fact builders can resolve `ref(dim_*)` immediately. (Only if the user has explicitly re-enabled worktree isolation must you merge each builder's branch back to `main` here before Stage 9.)
+
+**Checkpoint commit:** `git add -A`, then `git commit -m "stage 8: dimensions ({dim names})"`.
 
 ### Stage 9: Build Facts (parallel fan-out after dims merged)
 
@@ -584,7 +621,7 @@ Task(
 )
 ```
 
-Wait for all. Merge JSON envelopes into Section 7. Merge worktrees back to main.
+Wait for all. Merge JSON envelopes into Section 7. (No worktree merge-back needed while isolation is off — builders wrote directly to the main tree.) Then **checkpoint commit:** `git add -A`, then `git commit -m "stage 9: facts ({fact names})"`.
 
 **Strict conformance gate — HALT on any deviation.** Apply the same rule as Stage 8: before proceeding to Stage 10, scan every fact-builder envelope for `status != "success"`, `conforms_to_plan == false`, non-empty `deviations[]`, or non-empty `errors[]`. On any hit: log to Section 12, invoke `AskUserQuestion` with the deviation summary (offer **accept** — update Section 7/8 to match reality — or **abort**), proceed only after every deviation has been explicitly accepted. Typical fact deviations include missing FK columns in staging, grain assumption mismatches, and measure columns that turn out to be text-typed in the source.
 
@@ -606,7 +643,7 @@ Task(
 )
 ```
 
-Wait for completion. Verify test-writer wrote Section 9.
+Wait for completion. Verify test-writer wrote Section 9. Then **checkpoint commit:** `git add -A`, then `git commit -m "stage 10: tests (coverage {pct}%)"`.
 
 ### Stage 11: Validate Pipeline
 
@@ -621,7 +658,7 @@ Task(
 )
 ```
 
-Wait for completion. Read Section 10.
+Wait for completion. Read Section 10. Then **checkpoint commit:** `git add -A`, then `git commit -m "stage 11: validation ({status})"`.
 
 ### Stage 12: Handoff Summary
 
@@ -649,6 +686,8 @@ Issue as a single atomic Bash call. Use the project_name captured at Stage 4 (pl
 ```bash
 python "${CLAUDE_PLUGIN_ROOT}/skills/pbip-from-dbt/scripts/build_pbip.py" --output "4 - Semantic Layer" --name "{project_name}"
 ```
+
+**Do not pass `--schema`** — `build_pbip.py` auto-detects the marts schema from `target/manifest.json` (the schema dbt actually built into, e.g. `analytics`). Pass `--schema` only to force an override.
 
 Skip this step if:
 - Section 10 status is anything other than `Validated` (no point scaffolding a broken pipeline)
@@ -702,12 +741,12 @@ Example: "Previous attempt failed with 'column customer_id not found'. Source co
 
 - **Never fan-out staging builders** — they often need to be verified individually and profiling may show cross-dependencies
 - **Always fan-out dims and facts** — they're independent within their tier (assuming per-model schema YAML convention)
-- **Wait for dims to complete AND merge worktrees before starting facts**
+- **Wait for dims to complete before starting facts** (no worktree merge-back needed while isolation is off — builders write to the main tree)
 - **Sequential stages write directly to master doc; parallel stages return JSON → you merge**
 
 ## Master Doc Write Protocol
 
-You hold the lock on pipeline-design.md. Specialists return JSON; you edit the master doc. Exception: business-analyst, test-writer, and pipeline-validator write directly to their specific sections (1, 9, 10) because they don't have parallel peers at their stage. Section 11 (Created Objects Registry) is updated only by you after each create stage.
+You hold the lock on pipeline-design.md. Specialists return JSON; you edit the master doc. Exception: business-analyst (in its `write` mode, from answers you supply), test-writer, and pipeline-validator write directly to their specific sections (1, 9, 10) because they don't have parallel peers at their stage. Section 11 (Created Objects Registry) is updated only by you after each create stage.
 
 Never let two specialists write to the master doc at the same time. If a specialist misbehaves and writes outside its section, overwrite that section from its JSON return.
 
@@ -764,15 +803,15 @@ claude --agent dbt-pipeline-toolkit:dbt-pipeline-orchestrator:dbt-pipeline-orche
 
 **Expected flow:**
 1. You scan, find 3 CSVs in root
-2. Spawn business-analyst → 4 questions asked
+2. Spawn business-analyst (prepare) → you ask the 4 questions via AskUserQuestion → business-analyst (write) records Section 1
 3. Spawn data-explorer → 3 CSVs profiled
 4. You draft data model (3 staging, 2-3 dims + dim_date, 1 fact)
 5. Plan approval → user approves
 6. Spawn architecture-setup with JSON spec → scaffolds, moves CSVs
 7. Run sql-executor → loads to raw schema
 8. Spawn staging-builder × 3 sequentially
-9. Spawn dim-builder × 2-3 in parallel (worktrees)
-10. Spawn fact-builder × 1 (after dims merged)
+9. Spawn dim-builder × 2-3 in parallel (main tree — worktree isolation off by default)
+10. Spawn fact-builder × 1 (after dims complete)
 11. Spawn test-writer
 12. Spawn pipeline-validator
 13. Report success to user
@@ -784,11 +823,11 @@ To completely wipe a pipeline build and return the project to its original state
 ```bash
 # Total reset — database tables + all project folders + venv + git
 # Schemas are auto-detected from dbt_project.yml + profiles.yml;
-# defaults fall back to raw, dbo_staging, dbo_analytics.
+# defaults fall back to raw, staging, analytics.
 python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --database {database_name}
 
 # Override schemas explicitly (raw, staging, marts — 3 values, in that order)
-python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --database {database_name} --schemas raw,dbo_staging,dbo_analytics
+python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --database {database_name} --schemas raw,staging,analytics
 
 # Preview what would be dropped/deleted without executing
 python "${CLAUDE_PLUGIN_ROOT}/skills/dbt-project-initializer/scripts/reset_project.py" --database {database_name} --dry-run

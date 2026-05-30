@@ -159,14 +159,16 @@ models:
         data_tests:
           - not_null
           - relationships:
-              to: ref('dim_customer')
-              field: customer_key
+              arguments:
+                to: ref('dim_customer')
+                field: customer_key
       - name: product_key
         data_tests:
           - not_null
           - relationships:
-              to: ref('dim_product')
-              field: product_key
+              arguments:
+                to: ref('dim_product')
+                field: product_key
 ```
 
 **Dimension Tables** (dim_*):
@@ -184,7 +186,8 @@ models:
       - name: customer_status
         data_tests:
           - accepted_values:
-              values: ['Active', 'Inactive', 'Pending']
+              arguments:
+                values: ['Active', 'Inactive', 'Pending']
 ```
 
 ## Level 2: Custom Tests

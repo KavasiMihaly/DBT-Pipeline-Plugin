@@ -38,20 +38,20 @@ Design decisions documented there are binding. Do not contradict earlier decisio
 
 ## CRITICAL: Schema Names in SQL Server
 
-dbt-sqlserver concatenates the profile target schema with the `+schema` suffix from `dbt_project.yml`. The actual database schemas are:
+dbt-sqlserver's default (legacy) `generate_schema_name` uses the `+schema` value from `dbt_project.yml` **verbatim** — it does NOT prefix it with the profile target schema. The actual database schemas are:
 
-| dbt folder | `+schema` suffix | Actual DB schema (with `dbo` target) |
-|-----------|-------------------|--------------------------------------|
-| `models/staging/` | `staging` | `dbo_staging` |
-| `models/marts/` | `analytics` | `dbo_analytics` |
+| dbt folder | `+schema` value | Actual DB schema |
+|-----------|-------------------|------------------|
+| `models/staging/` | `staging` | `staging` |
+| `models/marts/` | `analytics` | `analytics` |
 | source data (raw) | — | `raw` |
 
-**When validating staging models, query `dbo_staging`, not `dbo`:**
+**When validating staging models, query `staging`, not `dbo`:**
 ```sql
-SELECT TOP 10 * FROM dbo_staging.stg_source__entity
+SELECT TOP 10 * FROM staging.stg_source__entity
 ```
 
-Read `dbt_project.yml` and `profiles.yml` to confirm the actual schema names. The pattern is `{profile_target_schema}_{dbt_project_schema_suffix}`.
+Confirm the actual schema names against `target/manifest.json` (each model node's `schema`) — the `+schema` value is used directly.
 
 ## Data Profiles Location
 
@@ -484,8 +484,9 @@ python "${CLAUDE_PLUGIN_ROOT}/skills/sql-server-reader/scripts/query_sql_server.
    - name: fk_column
      data_tests:
        - relationships:
-           to: ref('stg_source__parent_entity')
-           field: pk_column
+           arguments:
+             to: ref('stg_source__parent_entity')
+             field: pk_column
            config:
              severity: warn  # warn if orphans exist, don't block the build
    ```
