@@ -1,6 +1,6 @@
 {
   "name": "dbt-pipeline-toolkit",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "End-to-end dbt pipeline automation for SQL Server. CSV to star schema with staging, dimensions, facts, tests, and validation.",
   "author": {
     "name": "Mihaly Kavasi",
