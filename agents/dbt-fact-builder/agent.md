@@ -10,7 +10,6 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
 skills: dbt-pipeline-toolkit:dbt-runner, dbt-pipeline-toolkit:data-profiler, dbt-pipeline-toolkit:sql-server-reader
 color: blue
-isolation: worktree
 maxTurns: 50
 memory: project
 effort: high
@@ -225,7 +224,7 @@ where transaction_date > (select max(transaction_date) from {{ this }})
 ```
 
 ### Step 4: Add Tests
-Write the schema YAML to `models/marts/_fct_<subject>__schema.yml` — **one schema file per fact**. This enables parallel safe execution under worktree isolation (parallel builders never touch the same file).
+Write the schema YAML to `models/marts/_fct_<subject>__schema.yml` — **one schema file per fact**. This enables parallel safe execution during parallel builds: each builder writes a uniquely-named file, so parallel builders never touch the same file.
 
 Minimum tests:
 - unique, not_null on primary key

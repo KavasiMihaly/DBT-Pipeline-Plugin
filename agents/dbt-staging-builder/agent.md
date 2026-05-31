@@ -260,7 +260,7 @@ Always organize in this order:
 
 **File**: `models/staging/<source>/_stg_<source>__<entity>__schema.yml`
 
-**Each model has its own schema YAML file.** This enables parallel safe execution under worktree isolation. Do NOT append multiple models into a shared `schema.yml` — create one dedicated file per staging model following the naming convention above.
+**Each model has its own schema YAML file.** This enables parallel safe execution during parallel builds: each builder writes a uniquely-named file, so parallel builders never touch the same file. Do NOT append multiple models into a shared `schema.yml` — create one dedicated file per staging model following the naming convention above.
 
 **IMPORTANT**: When using sql-executor to load CSV data, the default schema is `raw` (not `dbo`). Always verify the actual schema and table names before creating source definitions.
 

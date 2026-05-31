@@ -9,7 +9,6 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
 skills: dbt-pipeline-toolkit:dbt-runner, dbt-pipeline-toolkit:data-profiler, dbt-pipeline-toolkit:sql-server-reader
 color: blue
-isolation: worktree
 maxTurns: 50
 memory: project
 ---
@@ -223,7 +222,7 @@ select * from surrogate_keys
 ```
 
 ### Step 4: Add Tests
-Write the schema YAML to `models/marts/_dim_<entity>__schema.yml` — **one schema file per dimension**. This enables parallel safe execution under worktree isolation (parallel builders never touch the same file).
+Write the schema YAML to `models/marts/_dim_<entity>__schema.yml` — **one schema file per dimension**. This enables parallel safe execution during parallel builds: each builder writes a uniquely-named file, so parallel builders never touch the same file.
 
 Minimum tests:
 - unique, not_null on surrogate key

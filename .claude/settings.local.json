@@ -18,7 +18,8 @@
       "Bash(Select-Object Name, PSIsContainer)",
       "Bash(Head -30)",
       "PowerShell(Head *)",
-      "Bash(powershell *)"
+      "Bash(powershell *)",
+      "Bash(sort -t- -k2 -n)"
     ]
   }
 }
