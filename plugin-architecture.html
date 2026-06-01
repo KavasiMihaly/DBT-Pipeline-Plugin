@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dbt-pipeline-toolkit · Component Interaction Map</title>
+<style>
+  :root{
+    --bg:#0c0f17;
+    --panel:#141925;
+    --panel-2:#1b2233;
+    --line:#2a3346;
+    --ink:#e8edf6;
+    --muted:#8a96ad;
+    --orch:#f5b73d;     /* orchestrator - yellow */
+    --agent:#5fb8ff;    /* agents - blue */
+    --skill:#7ee0a5;    /* skills - green */
+    --data:#c98bff;     /* data/mcp - purple */
+    --hook:#ff7a93;     /* hooks - red */
+    --cfg:#ffd27a;      /* config - amber */
+    --dim:0.12;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:radial-gradient(1200px 700px at 70% -10%, #161d2c 0%, var(--bg) 55%) fixed;
+    color:var(--ink);
+    font-family:"Inter","Segoe UI",system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.45;
+  }
+  header{
+    padding:30px 40px 18px;
+    border-bottom:1px solid var(--line);
+  }
+  .eyebrow{
+    font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--orch);font-weight:600;
+  }
+  h1{margin:6px 0 4px;font-size:26px;font-weight:700;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:14px;max-width:760px}
+  .controls{
+    display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+    padding:16px 40px;border-bottom:1px solid var(--line);
+  }
+  .tab{
+    background:var(--panel);border:1px solid var(--line);color:var(--muted);
+    padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;
+    transition:.15s;
+  }
+  .tab:hover{color:var(--ink);border-color:#3a4566}
+  .tab.active{background:var(--panel-2);color:var(--ink);border-color:#3d4a64}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-left:auto;font-size:12px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .hint{padding:10px 40px;font-size:12.5px;color:var(--muted)}
+  .hint b{color:var(--ink)}
+
+  /* ---- stage / canvas ---- */
+  #stage{position:relative;padding:24px 40px 60px}
+  #edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
+  .view{display:none}
+  .view.active{display:block}
+
+  .cols{display:grid;grid-template-columns:repeat(4,1fr);gap:28px;position:relative;z-index:2}
+  .col h2{
+    font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 14px;font-weight:700;text-align:center;
+  }
+  .node{
+    position:relative;background:var(--panel);border:1px solid var(--line);
+    border-radius:11px;padding:11px 13px;margin-bottom:11px;cursor:pointer;
+    transition:transform .15s, border-color .15s, box-shadow .15s, opacity .2s;
+  }
+  .node:hover{transform:translateY(-2px)}
+  .node .nm{font-size:13.5px;font-weight:650;display:flex;align-items:center;gap:8px}
+  .node .ds{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .node .tag{
+    position:absolute;top:-8px;right:10px;font-size:9px;letter-spacing:.08em;
+    text-transform:uppercase;padding:2px 7px;border-radius:6px;font-weight:700;color:#0c0f17;
+  }
+  .node .pip{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+
+  .node[data-kind=orch]{border-color:rgba(245,183,61,.4)}
+  .node[data-kind=orch] .pip,.dot.orch{background:var(--orch)}
+  .node[data-kind=agent] .pip,.dot.agent{background:var(--agent)}
+  .node[data-kind=skill] .pip,.dot.skill{background:var(--skill)}
+  .node[data-kind=data] .pip,.dot.data{background:var(--data)}
+  .node[data-kind=hook] .pip,.dot.hook{background:var(--hook)}
+  .node[data-kind=cfg] .pip,.dot.cfg{background:var(--cfg)}
+
+  .node[data-kind=orch]{background:linear-gradient(180deg,rgba(245,183,61,.10),var(--panel))}
+
+  /* dim / highlight states */
+  #stage.focusing .node{opacity:var(--dim)}
+  #stage.focusing .node.lit{opacity:1;border-color:#48577a;box-shadow:0 6px 22px rgba(0,0,0,.4)}
+  #stage.focusing .node.root{opacity:1;border-color:#6c7ba0;box-shadow:0 0 0 1px #6c7ba0,0 8px 26px rgba(0,0,0,.5)}
+
+  .small{font-size:11px;color:var(--muted);margin-top:6px}
+
+  /* orchestrator col spans full height visually */
+  .col.orch-col{display:flex;flex-direction:column;justify-content:flex-start}
+
+  .standalone{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px}
+  .standalone .lbl{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+
+  /* governance band */
+  .band{
+    margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:28px;position:relative;z-index:2;
+  }
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panel h3{margin:0 0 4px;font-size:13px;display:flex;align-items:center;gap:8px}
+  .panel .desc{font-size:12px;color:var(--muted);margin-bottom:12px}
+  .hookrow,.cfgrow{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line);font-size:12.5px}
+  .hookrow:first-of-type,.cfgrow:first-of-type{border-top:none}
+  .badge{font-size:9.5px;font-weight:700;letter-spacing:.05em;padding:2px 7px;border-radius:5px;white-space:nowrap;flex:0 0 auto;margin-top:1px}
+  .badge.pre{background:rgba(255,122,147,.16);color:#ff9fb1;border:1px solid rgba(255,122,147,.3)}
+  .badge.wt{background:rgba(201,139,255,.14);color:#d4abff;border:1px solid rgba(201,139,255,.3)}
+  .hookrow .t{font-weight:600}
+  .hookrow .m{color:var(--muted);font-size:11.5px}
+
+  /* ---- pipeline flow view ---- */
+  .flow{position:relative;z-index:2;display:flex;flex-direction:column;gap:0}
+  .stagecard{
+    display:grid;grid-template-columns:60px 1fr 280px;gap:18px;align-items:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:14px 18px;margin-bottom:10px;transition:.15s;
+  }
+  .stagecard:hover{border-color:#3d4a64;transform:translateX(3px)}
+  .stagecard .num{
+    font-size:22px;font-weight:800;color:var(--orch);text-align:center;
+    font-variant-numeric:tabular-nums;
+  }
+  .stagecard .ttl{font-size:14.5px;font-weight:650}
+  .stagecard .meta{font-size:12px;color:var(--muted);margin-top:2px}
+  .actors{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .chip{font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+  .chip.agent{color:var(--agent);border-color:rgba(95,184,255,.35);background:rgba(95,184,255,.08)}
+  .chip.skill{color:var(--skill);border-color:rgba(126,224,165,.35);background:rgba(126,224,165,.08)}
+  .chip.user{color:var(--orch);border-color:rgba(245,183,61,.35);background:rgba(245,183,61,.08)}
+  .chip.gate{color:var(--hook);border-color:rgba(255,122,147,.35);background:rgba(255,122,147,.08)}
+  footer{padding:24px 40px 50px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+  code{background:var(--panel-2);padding:1px 6px;border-radius:5px;font-size:11.5px;color:#cdd7e8}
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">dbt-pipeline-toolkit · v1.0.5</div>
+  <h1>Plugin Component Interaction Map</h1>
+  <div class="sub">How the orchestrator, 9 agents, 9 skills, 4 lifecycle hooks, the SQL Server MCP server, and userConfig wire together to turn raw CSVs into a tested star schema on SQL Server.</div>
+</header>
+
+<div class="controls">
+  <button class="tab active" data-view="arch">Architecture</button>
+  <button class="tab" data-view="flow">Pipeline Flow (13 stages)</button>
+  <div class="legend">
+    <span><i class="dot orch"></i>Orchestrator</span>
+    <span><i class="dot agent"></i>Agent</span>
+    <span><i class="dot skill"></i>Skill</span>
+    <span><i class="dot data"></i>MCP / SQL</span>
+    <span><i class="dot hook"></i>Hook</span>
+    <span><i class="dot cfg"></i>Config</span>
+  </div>
+</div>
+
+<div class="hint" id="archHint"><b>Click any node</b> to spotlight what it spawns or calls. Click empty space to reset. Lines = "spawns" (orchestrator→agent) or "invokes" (→skill / →SQL).</div>
+
+<div id="stage">
+  <svg id="edges"></svg>
+
+  <!-- ARCHITECTURE VIEW -->
+  <div class="view active" id="view-arch">
+    <div class="cols">
+      <!-- ORCHESTRATOR -->
+      <div class="col orch-col">
+        <h2>Entry &amp; Coordination</h2>
+        <div class="node" data-kind="cfg" id="n-user">
+          <div class="nm"><span class="pip"></span>User / CLI</div>
+          <div class="ds"><code>claude --agent …orchestrator</code> in a repo of CSVs</div>
+        </div>
+        <div class="node root-orch" data-kind="orch" id="n-orch">
+          <span class="tag" style="background:var(--orch)">main thread</span>
+          <div class="nm"><span class="pip"></span>dbt-pipeline-orchestrator</div>
+          <div class="ds">Drives 13 stages (0–12). Spawns every agent via the <code>Agent</code> tool, owns the master <code>pipeline-design.md</code>, and calls some skills directly.</div>
+        </div>
+        <div class="standalone">
+          <div class="lbl">Calls these skills directly</div>
+          <div class="small">sql-connection · data-profiler · sql-executor · dbt-runner · dbt-test-coverage-analyzer · dbt-project-initializer · pbip-from-dbt</div>
+        </div>
+      </div>
+
+      <!-- AGENTS -->
+      <div class="col">
+        <h2>9 Specialized Agents</h2>
+        <div class="node" data-kind="agent" id="a-ba"><div class="nm"><span class="pip"></span>business-analyst</div><div class="ds">Requirements Q&amp;A prep → Section 1</div></div>
+        <div class="node" data-kind="agent" id="a-de"><div class="nm"><span class="pip"></span>data-explorer</div><div class="ds">Profiles every source CSV</div></div>
+        <div class="node" data-kind="agent" id="a-arch"><div class="nm"><span class="pip"></span>dbt-architecture-setup</div><div class="ds">Scaffolds project + venv + dbt</div></div>
+        <div class="node" data-kind="agent" id="a-stg"><div class="nm"><span class="pip"></span>dbt-staging-builder</div><div class="ds">stg_* models from raw</div></div>
+        <div class="node" data-kind="agent" id="a-dim"><div class="nm"><span class="pip"></span>dbt-dimension-builder</div><div class="ds">dim_* with SCD patterns</div></div>
+        <div class="node" data-kind="agent" id="a-fct"><div class="nm"><span class="pip"></span>dbt-fact-builder</div><div class="ds">fct_* incremental models</div></div>
+        <div class="node" data-kind="agent" id="a-test"><div class="nm"><span class="pip"></span>dbt-test-writer</div><div class="ds">Generic/custom/unit tests</div></div>
+        <div class="node" data-kind="agent" id="a-val"><div class="nm"><span class="pip"></span>dbt-pipeline-validator</div><div class="ds">build + test, Section 10</div></div>
+      </div>
+
+      <!-- SKILLS -->
+      <div class="col">
+        <h2>9 User-Invocable Skills</h2>
+        <div class="node" data-kind="skill" id="s-conn"><div class="nm"><span class="pip"></span>sql-connection</div><div class="ds">Configure/test connections</div></div>
+        <div class="node" data-kind="skill" id="s-prof"><div class="nm"><span class="pip"></span>data-profiler</div><div class="ds">Profile CSVs &amp; SQL tables</div></div>
+        <div class="node" data-kind="skill" id="s-read"><div class="nm"><span class="pip"></span>sql-server-reader</div><div class="ds">Read-only SELECT queries</div></div>
+        <div class="node" data-kind="skill" id="s-exec"><div class="nm"><span class="pip"></span>sql-executor</div><div class="ds">Load CSVs / SQL mutations</div></div>
+        <div class="node" data-kind="skill" id="s-run"><div class="nm"><span class="pip"></span>dbt-runner</div><div class="ds">run / test / build / compile</div></div>
+        <div class="node" data-kind="skill" id="s-cov"><div class="nm"><span class="pip"></span>dbt-test-coverage-analyzer</div><div class="ds">Coverage % &amp; gaps</div></div>
+        <div class="node" data-kind="skill" id="s-init"><div class="nm"><span class="pip"></span>dbt-project-initializer</div><div class="ds">Scaffold / reset project</div></div>
+        <div class="node" data-kind="skill" id="s-pbip"><div class="nm"><span class="pip"></span>pbip-from-dbt</div><div class="ds">Power BI Project from star schema</div></div>
+        <div class="node" data-kind="skill" id="s-docs"><div class="nm"><span class="pip"></span>dbt-docs-generator</div><div class="ds">Docs &amp; lineage (user-invoked)</div></div>
+      </div>
+
+      <!-- DATA -->
+      <div class="col">
+        <h2>Data Access Layer</h2>
+        <div class="node" data-kind="data" id="d-mcp">
+          <span class="tag" style="background:var(--data)">MCP</span>
+          <div class="nm"><span class="pip"></span>sql-server-mcp</div>
+          <div class="ds">Node MCP server: <code>connect</code>, <code>execute_query</code>, <code>get_tables</code>… Auth: sql / entra-default / entra-sp.</div>
+        </div>
+        <div class="node" data-kind="data" id="d-sql">
+          <div class="nm"><span class="pip"></span>SQL Server</div>
+          <div class="ds">raw → staging → analytics schemas. Reached two ways: MCP (Node) or Python skills (ODBC, incl. Windows auth).</div>
+        </div>
+        <div class="standalone">
+          <div class="lbl">Two paths to the database</div>
+          <div class="small"><b style="color:var(--data)">MCP</b> — pure-JS driver (sql / entra). <b style="color:var(--skill)">Python skills</b> — ODBC driver, the only path that does Windows / integrated auth.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GOVERNANCE BAND -->
+    <div class="band">
+      <div class="panel" id="p-hooks">
+        <h3><i class="dot hook"></i>4 Lifecycle Hooks <span style="color:var(--muted);font-weight:400;font-size:11px">— registered in plugin.json</span></h3>
+        <div class="desc">Intercept tool calls before they run. They make the autonomous, background-spawned agents possible.</div>
+        <div class="hookrow"><span class="badge pre">PreToolUse · Write|Edit</span><div><div class="t">validate-dbt-structure.py</div><div class="m">Enforces dbt file naming &amp; placement before any model is written.</div></div></div>
+        <div class="hookrow"><span class="badge pre">PreToolUse · Bash</span><div><div class="t">approve-plugin-bash.py</div><div class="m">Auto-approves plugin-internal scripts (allowlist) so background agents never stall on a permission prompt.</div></div></div>
+        <div class="hookrow"><span class="badge wt">WorktreeCreate</span><div><div class="t">create-worktree.py</div><div class="m">Sets up an isolated git worktree (isolation is OFF by default).</div></div></div>
+        <div class="hookrow"><span class="badge wt">WorktreeRemove</span><div><div class="t">remove-worktree.py</div><div class="m">Cleans up the worktree on teardown.</div></div></div>
+      </div>
+      <div class="panel" id="p-cfg">
+        <h3><i class="dot cfg"></i>userConfig <span style="color:var(--muted);font-weight:400;font-size:11px">— set at install time</span></h3>
+        <div class="desc">Connection settings provided once, then injected into every subprocess as <code>CLAUDE_PLUGIN_OPTION_*</code> env vars.</div>
+        <div class="cfgrow"><span class="badge wt" style="background:rgba(255,210,122,.14);color:var(--cfg);border-color:rgba(255,210,122,.3)">→ MCP env</span><div><div class="t" style="color:var(--ink)">sql_server · sql_database · sql_auth_type</div><div class="m">Feed the <code>${user_config.*}</code> bindings in the MCP server block.</div></div></div>
+        <div class="cfgrow"><span class="badge wt" style="background:rgba(255,210,122,.14);color:var(--cfg);border-color:rgba(255,210,122,.3)">→ skills</span><div><div class="t" style="color:var(--ink)">sql_user · sql_password*</div><div class="m">Python skills read these via <code>_load_plugin_userconfig_env()</code>. * sensitive → system keychain.</div></div></div>
+        <div class="cfgrow"><span class="badge wt" style="background:rgba(255,210,122,.14);color:var(--cfg);border-color:rgba(255,210,122,.3)">→ entra</span><div><div class="t" style="color:var(--ink)">azure_tenant_id · client_id · client_secret*</div><div class="m">Service-principal auth for Azure SQL via the MCP server.</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PIPELINE FLOW VIEW -->
+  <div class="view" id="view-flow">
+    <div class="flow" id="flowList"></div>
+  </div>
+</div>
+
+<footer>
+  Generated from this repo — <code>.claude-plugin/plugin.json</code>, <code>agents/*/agent.md</code> frontmatter (<code>skills:</code> + <code>tools: Agent(...)</code>), and <code>hooks/</code>.
+  Agents are referenced 3-part (<code>dbt-pipeline-toolkit:&lt;dir&gt;:&lt;name&gt;</code>); skills 2-part (<code>dbt-pipeline-toolkit:&lt;dir&gt;</code>).
+  <code>dbt-docs-generator</code> is standalone (no agent calls it). The orchestrator must run as the main thread — a subagent can't spawn subagents.
+</footer>
+
+<script>
+/* ---------------- relationship data (from agent.md frontmatter) ---------------- */
+const ORCH = "n-orch";
+
+// orchestrator -> agents (Agent tool / Task spawns)
+const orchAgents = ["a-ba","a-de","a-arch","a-stg","a-dim","a-fct","a-test","a-val"];
+// orchestrator -> skills it calls directly
+const orchSkills = ["s-conn","s-prof","s-exec","s-run","s-cov","s-init","s-pbip"];
+
+// agent -> skills (from `skills:` frontmatter)
+const agentSkills = {
+  "a-ba":  ["s-prof","s-read"],
+  "a-de":  ["s-prof"],
+  "a-arch":["s-init"],
+  "a-stg": ["s-run","s-prof","s-read"],
+  "a-dim": ["s-run","s-prof","s-read"],
+  "a-fct": ["s-run","s-prof","s-read"],
+  "a-test":["s-run","s-cov","s-prof"],
+  "a-val": ["s-run","s-cov"],
+};
+
+// skills that reach SQL Server (Python ODBC path)
+const skillsToSql = ["s-conn","s-prof","s-read","s-exec","s-run","s-pbip"];
+// MCP server reaches SQL too
+const mcpToSql = [["d-mcp","d-sql"]];
+// config feeds
+const cfgEdges = [["n-user","n-orch"]]; // user launches orchestrator
+
+// Build full edge list: [from, to, type]
+const edges = [];
+cfgEdges.forEach(([a,b])=>edges.push([a,b,"cfg"]));
+orchAgents.forEach(a=>edges.push([ORCH,a,"spawn"]));
+orchSkills.forEach(s=>edges.push([ORCH,s,"skill"]));
+Object.entries(agentSkills).forEach(([ag,sk])=>sk.forEach(s=>edges.push([ag,s,"skill"])));
+skillsToSql.forEach(s=>edges.push([s,"d-sql","data"]));
+mcpToSql.forEach(([a,b])=>edges.push([a,b,"data"]));
+
+// adjacency for highlight (undirected reach from a clicked node, 1 hop downstream-ish)
+const adj = {};
+edges.forEach(([a,b])=>{ (adj[a]=adj[a]||[]).push(b); (adj[b]=adj[b]||[]).push(a); });
+
+const COLOR = {spawn:"#5fb8ff", skill:"#7ee0a5", data:"#c98bff", cfg:"#ffd27a"};
+
+const svg = document.getElementById("edges");
+const stage = document.getElementById("stage");
+
+function center(el){
+  const r = el.getBoundingClientRect();
+  const s = stage.getBoundingClientRect();
+  return {x:r.left - s.left + r.width/2, y:r.top - s.top + r.height/2,
+          left:r.left - s.left, right:r.right - s.left, top:r.top - s.top, bottom:r.bottom - s.top,
+          w:r.width, h:r.height};
+}
+
+let litEdges = []; // {el, from, to}
+function drawEdges(){
+  if(!document.getElementById("view-arch").classList.contains("active")){ svg.innerHTML=""; return; }
+  svg.innerHTML="";
+  litEdges = [];
+  const s = stage.getBoundingClientRect();
+  svg.setAttribute("viewBox",`0 0 ${s.width} ${s.height}`);
+  edges.forEach(([a,b,type])=>{
+    const ea=document.getElementById(a), eb=document.getElementById(b);
+    if(!ea||!eb) return;
+    const ca=center(ea), cb=center(eb);
+    // exit right of source, enter left of target when target is to the right
+    let x1,y1,x2,y2;
+    if(cb.x>=ca.x){ x1=ca.right; y1=ca.y; x2=cb.left; y2=cb.y; }
+    else { x1=ca.left; y1=ca.y; x2=cb.right; y2=cb.y; }
+    const dx=Math.abs(x2-x1)*0.45;
+    const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+    const c1x = x1 + (x2>=x1?dx:-dx), c2x = x2 - (x2>=x1?dx:-dx);
+    path.setAttribute("d",`M ${x1} ${y1} C ${c1x} ${y1}, ${c2x} ${y2}, ${x2} ${y2}`);
+    path.setAttribute("fill","none");
+    path.setAttribute("stroke",COLOR[type]||"#3a4566");
+    path.setAttribute("stroke-width","1.4");
+    path.setAttribute("stroke-opacity","0.22");
+    path.dataset.from=a; path.dataset.to=b;
+    svg.appendChild(path);
+    litEdges.push({el:path, from:a, to:b});
+  });
+  applyFocus();
+}
+
+/* ---------------- focus / highlight ---------------- */
+let focusId = null;
+function reachSet(id){
+  // BFS over directed-ish graph but treat as reachable cluster downstream + immediate up
+  const set = new Set([id]);
+  const q=[id];
+  // downstream: follow edges where node is source
+  while(q.length){
+    const cur=q.shift();
+    edges.forEach(([a,b])=>{
+      if(a===cur && !set.has(b)){ set.add(b); q.push(b); }
+    });
+  }
+  // also include direct upstream parents (who calls me)
+  edges.forEach(([a,b])=>{ if(b===id) set.add(a); });
+  return set;
+}
+
+function applyFocus(){
+  document.querySelectorAll(".node").forEach(n=>n.classList.remove("lit","root"));
+  if(focusId===null){
+    stage.classList.remove("focusing");
+    litEdges.forEach(e=>e.el.setAttribute("stroke-opacity","0.22"));
+    document.getElementById("p-hooks").style.opacity="1";
+    document.getElementById("p-cfg").style.opacity="1";
+    return;
+  }
+  stage.classList.add("focusing");
+  const set = reachSet(focusId);
+  set.forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.add("lit"); });
+  const rootEl=document.getElementById(focusId); if(rootEl){rootEl.classList.add("root");rootEl.classList.remove("lit");}
+  litEdges.forEach(e=>{
+    const on = set.has(e.from) && set.has(e.to);
+    e.el.setAttribute("stroke-opacity", on? "0.95":"0.04");
+    e.el.setAttribute("stroke-width", on? "2.1":"1.2");
+  });
+}
+
+document.querySelectorAll(".node").forEach(n=>{
+  n.addEventListener("click",e=>{
+    e.stopPropagation();
+    focusId = (focusId===n.id)? null : n.id;
+    applyFocus();
+  });
+});
+stage.addEventListener("click",()=>{ focusId=null; applyFocus(); });
+
+/* ---------------- tabs ---------------- */
+document.querySelectorAll(".tab").forEach(t=>{
+  t.addEventListener("click",()=>{
+    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+    t.classList.add("active");
+    const v=t.dataset.view;
+    document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
+    document.getElementById("view-"+v).classList.add("active");
+    document.getElementById("archHint").style.display = v==="arch"?"block":"none";
+    focusId=null;
+    requestAnimationFrame(drawEdges);
+  });
+});
+
+/* ---------------- pipeline flow data ---------------- */
+const stages = [
+  {n:"·",t:"Pre · Connection Check",m:"Verify SQL Server is reachable before any work",a:[["sql-connection","skill"]]},
+  {n:0,t:"Source Discovery",m:"Scan cwd for CSVs; detect fresh vs incremental build",a:[]},
+  {n:1,t:"Source Profiling",m:"One data-explorer per CSV (parallel) → column stats, PKs, types",a:[["data-explorer","agent"],["data-profiler","skill"]]},
+  {n:2,t:"Discovery Q&A",m:"BA prepares questions → orchestrator asks user → BA writes Section 1",a:[["business-analyst","agent"],["USER TOUCH POINT 1","user"]]},
+  {n:3,t:"Draft Data Model",m:"Draft staging/dim/fact + semantic layer (Sections 5–9)",a:[]},
+  {n:4,t:"Plan Approval Gate",m:"ExitPlanMode — user approves the build plan",a:[["USER TOUCH POINT 2","user"],["plan gate","gate"]]},
+  {n:5,t:"Project Scaffolding",m:"Folders, venv, dbt config, git init + leak checks",a:[["dbt-architecture-setup","agent"],["dbt-project-initializer","skill"]]},
+  {n:6,t:"Load Source Data",m:"Bulk-load CSVs into the raw schema",a:[["sql-executor","skill"]]},
+  {n:7,t:"Build Staging",m:"stg_* models, sequential (one at a time)",a:[["dbt-staging-builder","agent"],["dbt-runner","skill"]]},
+  {n:8,t:"Build Dimensions",m:"dim_* parallel fan-out · strict conformance gate",a:[["dbt-dimension-builder","agent"],["dbt-runner","skill"],["conformance gate","gate"]]},
+  {n:9,t:"Build Facts",m:"fct_* parallel fan-out after dims · conformance gate",a:[["dbt-fact-builder","agent"],["dbt-runner","skill"],["conformance gate","gate"]]},
+  {n:10,t:"Write Tests",m:"Iterate to ≥80% coverage, then run tests",a:[["dbt-test-writer","agent"],["dbt-test-coverage-analyzer","skill"]]},
+  {n:11,t:"Validate Pipeline",m:"dbt build --full-refresh + final coverage → Section 10",a:[["dbt-pipeline-validator","agent"],["dbt-runner","skill"]]},
+  {n:12,t:"Handoff Summary",m:"Set status; optional Power BI scaffold if Validated",a:[["pbip-from-dbt","skill"]]},
+];
+const flow = document.getElementById("flowList");
+stages.forEach(s=>{
+  const chips = s.a.map(([nm,k])=>`<span class="chip ${k}">${nm}</span>`).join("");
+  flow.insertAdjacentHTML("beforeend",
+    `<div class="stagecard">
+       <div class="num">${s.n}</div>
+       <div><div class="ttl">${s.t}</div><div class="meta">${s.m}</div></div>
+       <div class="actors">${chips||'<span class="meta" style="font-size:11px;color:var(--line)">orchestrator only</span>'}</div>
+     </div>`);
+});
+
+/* ---------------- init ---------------- */
+window.addEventListener("resize",()=>requestAnimationFrame(drawEdges));
+window.addEventListener("load",drawEdges);
+requestAnimationFrame(drawEdges);
+setTimeout(drawEdges,200); // fonts settle
+</script>
+</body>
+</html>
